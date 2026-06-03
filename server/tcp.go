@@ -7,17 +7,19 @@ import (
 	"net"
 	"strings"
 
-	"godis/commands" // 引入命令层
+	"godis/commands"
 	"godis/datastore"
 	"godis/protocol"
 )
 
 type Server struct {
-	db *datastore.GodisDB
+	db  *datastore.GodisDB
+	aof *datastore.AofLogger
 }
 
-func NewServer(db *datastore.GodisDB) *Server {
-	return &Server{db: db}
+// NewServer 接收 aof 参数
+func NewServer(db *datastore.GodisDB, aof *datastore.AofLogger) *Server {
+	return &Server{db: db, aof: aof}
 }
 
 func (s *Server) Start(address string) {
@@ -60,15 +62,19 @@ func (s *Server) handleClient(conn net.Conn) {
 
 		cmdName := strings.ToUpper(args[0])
 
-		// 命令注册表里查找命令
 		var reply string
 		if handler, exists := commands.CommandRegistry[cmdName]; exists {
-			// 组装上下文，丢给命令层去跑
 			ctx := &commands.CommandContext{
 				Args: args,
 				DB:   s.db,
 			}
 			reply = handler(ctx)
+
+			// 如果命令执行成功（返回 +OK 状态），且是 SET 命令，将其落盘！
+			if cmdName == "SET" && strings.HasPrefix(reply, "+OK") {
+				_ = s.aof.WriteCmd(args)
+			}
+
 		} else {
 			reply = fmt.Sprintf("-ERR unknown command '%s'\r\n", cmdName)
 		}

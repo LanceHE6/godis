@@ -1,25 +1,38 @@
 package commands
 
 import (
+	"fmt"
 	"godis/datastore"
 )
 
-// CommandContext 传递给每个命令的上下文参数
 type CommandContext struct {
-	Args []string           // 客户端发来的参数，例如 ["SET", "key", "val"]
-	DB   *datastore.GodisDB // 统一操作的数据库实例
+	Args []string
+	DB   *datastore.GodisDB
 }
 
-// HandlerFunc 每个具体命令要实现的函数签名
-// 返回值是给客户端的 RESP 回复字符串
 type HandlerFunc func(ctx *CommandContext) string
 
-// 全局命令注册表
 var CommandRegistry = make(map[string]HandlerFunc)
 
+// GlobalAof 留出指针，方便命令层调用持久化组件
+var GlobalAof *datastore.AofLogger
+
 func init() {
-	// 注册通用命令
 	CommandRegistry["COMMAND"] = func(ctx *CommandContext) string {
 		return "*0\r\n"
+	}
+
+	// 【新增】：手动触发混合重写的命令
+	CommandRegistry["BGREWRITEAOF"] = func(ctx *CommandContext) string {
+		if GlobalAof == nil {
+			return "-ERR AOF logger not initialized\r\n"
+		}
+
+		// 触发数据二进制写入
+		err := GlobalAof.RewriteToHybrid(ctx.DB)
+		if err != nil {
+			return fmt.Sprintf("-ERR Rewrite failed: %v\r\n", err)
+		}
+		return "+Background append only file rewriting started (Godis Hybrid Mode)\r\n"
 	}
 }
