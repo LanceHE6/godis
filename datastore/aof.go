@@ -58,7 +58,7 @@ func (aof *AofLogger) RewriteToHybrid(db *GodisDB) error {
 
 	// GDB 序列化方法
 	if err := db.SaveToBinary(&buf); err != nil {
-		return fmt.Errorf("序列化 GDB 失败: %v", err)
+		return fmt.Errorf("failed to serialize GDB: %v", err)
 	}
 
 	// 3. 以截断清空（O_TRUNC）的模式重新打开 AOF 文件，写入二进制数据
@@ -75,12 +75,11 @@ func (aof *AofLogger) RewriteToHybrid(db *GodisDB) error {
 
 	// 4. 将持久化句柄重新切换回原来的文件，后续的客户端命令可以继续在这个文件末尾追加了
 	aof.file = file
-	fmt.Println("【💾 混合重写】创建 GDB 快照成功")
 
 	fileInfo, _ := file.Stat()
 	aof.lastRewriteSize = fileInfo.Size()
 
-	fmt.Printf("【💾 混合重写】成功！当前基础大小: %.2f KB\n", float64(aof.lastRewriteSize)/1024.0)
+	log.Info("GDB snapshot created successfully.")
 	return nil
 }
 

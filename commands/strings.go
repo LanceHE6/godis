@@ -14,6 +14,7 @@ func init() {
 }
 
 func handlePing(ctx *CommandContext) string {
+	cmdLog.Debug("PING received")
 	return "+PONG\r\n"
 }
 
@@ -34,6 +35,7 @@ func handleSet(ctx *CommandContext) string {
 		}
 	}
 
+	cmdLog.Debug("SET key=%s val=%s ttl=%d", key, val, ttl)
 	ctx.DB.Set(key, val, ttl)
 	return "+OK\r\n"
 }
@@ -45,6 +47,7 @@ func handleGet(ctx *CommandContext) string {
 	}
 
 	key := args[1]
+	cmdLog.Debug("GET key=%s", key)
 	val, exists := ctx.DB.Get(key)
 	if !exists {
 		return "$-1\r\n"

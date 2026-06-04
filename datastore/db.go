@@ -1,11 +1,13 @@
 package datastore
 
 import (
-	"fmt"
+	"godis/logger"
 	"os"
 	"sync"
 	"time"
 )
+
+var log = logger.NewModuleLogger("DATASTORE")
 
 // Item 带有过期时间的数据项
 type Item struct {
@@ -67,13 +69,13 @@ func (db *GodisDB) Get(key string) (string, bool) {
 // startGcWorker GC，负责在后台定期清理过期的 Key
 func (db *GodisDB) startGcWorker() {
 	ticker := time.NewTicker(1 * time.Second)
-	fmt.Println("【🔥 GC 清理】常驻协程启动成功")
+	log.Info("GC coroutine started successfully")
 	for range ticker.C {
 		now := time.Now()
 		db.mu.Lock()
 		for key, item := range db.data {
 			if !item.IsNeverDie && now.After(item.ExpiresAt) {
-				fmt.Printf("【🔥 GC 清理】检测到 Key [%s] 已过期，执行内存释放\n", key)
+				log.Info("clear expired key [%s]", key)
 				delete(db.data, key)
 			}
 		}
@@ -86,7 +88,7 @@ func (db *GodisDB) startGcWorker() {
 // aofLogger: 持久化组件实例
 func (db *GodisDB) StartAutoRewriteWorker(filename string, aofLogger *AofLogger) {
 	ticker := time.NewTicker(10 * time.Second)
-	fmt.Println("【💾 智能自动重写】监控协程已启动...")
+	log.Info("AOF coroutine started successfully")
 
 	// 绝对增量上限：只要新写满 64MB 的文本命令，不管比例到没到，必须重写
 	const maxAbsoluteGrowthBytes int64 = 64 * 1024 * 1024 // 1MB
@@ -115,8 +117,7 @@ func (db *GodisDB) StartAutoRewriteWorker(filename string, aofLogger *AofLogger)
 			// 只有当新追加的文本命令体积，达到了硬上限或达到了上一次总大小的 50% 时，才触发重写
 			// 比如上次重写后是 3KB，必须等文件涨到 4.5KB 以上，才会触发下一次瘦身
 			if growthBytes >= maxAbsoluteGrowthBytes || (float64(growthBytes)/float64(lastSize) >= 0.5) {
-				fmt.Printf("【💾 智能自动重写】检测到文件已比上次重写增长了 %.1f%%，触发GDB快照！\n",
-					(float64(growthBytes)/float64(lastSize))*100.0)
+				log.Info("AOF has been triggered")
 				_ = aofLogger.RewriteToHybrid(db)
 			}
 		}

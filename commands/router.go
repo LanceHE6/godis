@@ -3,7 +3,10 @@ package commands
 import (
 	"fmt"
 	"godis/datastore"
+	"godis/logger"
 )
+
+var cmdLog = logger.NewModuleLogger("COMMANDS")
 
 type CommandContext struct {
 	Args []string
@@ -19,11 +22,13 @@ var GlobalAof *datastore.AofLogger
 
 func init() {
 	CommandRegistry["COMMAND"] = func(ctx *CommandContext) string {
+		cmdLog.Debug("COMMAND received")
 		return "*0\r\n"
 	}
 
-	// 【新增】：手动触发混合重写的命令
+	// 手动触发混合重写的命令
 	CommandRegistry["BGREWRITEAOF"] = func(ctx *CommandContext) string {
+		cmdLog.Debug("BGREWRITEAOF received")
 		if GlobalAof == nil {
 			return "-ERR AOF logger not initialized\r\n"
 		}

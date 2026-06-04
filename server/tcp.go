@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"fmt"
+	"godis/logger"
 	"io"
 	"net"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"godis/datastore"
 	"godis/protocol"
 )
+
+var log = logger.NewModuleLogger("SERVER")
 
 type Server struct {
 	db  *datastore.GodisDB
@@ -25,17 +28,17 @@ func NewServer(db *datastore.GodisDB, aof *datastore.AofLogger) *Server {
 func (s *Server) Start(address string) {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		fmt.Printf("启动监听失败: %v\n", err)
+		log.Error("failed to start listener: %v\n", err)
 		return
 	}
 	defer listener.Close()
 
-	fmt.Printf("Godis 服务器已启动，正在监听 %s ...\n", address)
+	log.Info("godis server started, listening on %s ...\n", address)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Printf("接收客户端连接失败: %v\n", err)
+			log.Error("failed to accept client connection: %v\n", err)
 			continue
 		}
 		go s.handleClient(conn)

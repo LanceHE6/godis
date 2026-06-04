@@ -17,16 +17,16 @@ func ParseRESP(reader *bufio.Reader) ([]string, error) {
 
 	line = strings.TrimSpace(line)
 	if len(line) == 0 {
-		return nil, fmt.Errorf("收到空行")
+		return nil, fmt.Errorf("received an empty line")
 	}
 
 	if line[0] != '*' {
-		return nil, fmt.Errorf("非法协议: 期待以 '*' 开头，实际收到 '%c'", line[0])
+		return nil, fmt.Errorf("invalid protocol")
 	}
 
 	arrayLen, err := strconv.Atoi(line[1:])
 	if err != nil || arrayLen <= 0 {
-		return nil, fmt.Errorf("非法的数组长度")
+		return nil, fmt.Errorf("invalid array length")
 	}
 
 	args := make([]string, 0, arrayLen)
@@ -39,12 +39,12 @@ func ParseRESP(reader *bufio.Reader) ([]string, error) {
 		strLenLine = strings.TrimSpace(strLenLine)
 
 		if len(strLenLine) == 0 || strLenLine[0] != '$' {
-			return nil, fmt.Errorf("非法协议: 期待以 '$' 开头")
+			return nil, fmt.Errorf("invalid protocol")
 		}
 
 		strLen, err := strconv.Atoi(strLenLine[1:])
 		if err != nil {
-			return nil, fmt.Errorf("非法的 Bulk String 长度")
+			return nil, fmt.Errorf("invalid bulk string length")
 		}
 
 		buf := make([]byte, strLen)
