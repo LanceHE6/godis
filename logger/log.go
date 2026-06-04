@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // Level 定义日志级别数字权重
@@ -27,7 +29,7 @@ var levelNames = map[Level]string{
 
 // 全局变量
 var (
-	GlobalFile  *os.File
+	fileRolling *lumberjack.Logger
 	globalLevel = LevelInfo // 仅控制控制台的过滤级别
 )
 
@@ -42,18 +44,21 @@ func InitGlobalLogger(filename string, consoleLvl Level) error {
 	globalLevel = consoleLvl // 设置控制台的全局过滤级别
 
 	dir := filepath.Dir(filename)
-
 	// 自动递归创建文件夹
 	// os.ModePerm 代表 0777 最高读写权限
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to auto-create log directory [%s]: %v", dir, err)
 	}
-	// 打开或创建日志文件（追加模式）
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		return err
+	// 初始化 lumberjack 智能滚动写入器
+	fileRolling = &lumberjack.Logger{
+		Filename:   filename, // 日志文件路径
+		MaxSize:    20,       // 【单位：MB】单文件最大 20MB，超过就切片
+		MaxBackups: 10,       // 最多保留 10 个历史备份文件
+		MaxAge:     7,        // 【单位：天】保留最近 7 天的历史日志
+		Compress:   true,     // 核心大招：历史日志自动用 Gzip 压缩（变成 .log.gz）
+		LocalTime:  true,     // 使用本地时间命名备份文件
 	}
-	GlobalFile = file
+
 	return nil
 }
 
@@ -71,13 +76,20 @@ func (ml *ModuleLogger) Log(lvl Level, format string, v ...interface{}) {
 	msg := fmt.Sprintf(format, v...)
 	fullMsg := fmt.Sprintf("[%s] [%s] %s", levelNames[lvl], ml.moduleName, msg)
 
-	if GlobalFile != nil {
-		fileLogger := log.New(GlobalFile, "", log.LstdFlags)
+	if fileRolling != nil {
+		fileLogger := log.New(fileRolling, "", log.LstdFlags)
 		_ = fileLogger.Output(3, fullMsg)
 	}
 
 	if lvl >= globalLevel {
 		_ = ml.outConsole.Output(3, fullMsg)
+	}
+}
+
+// CloseLogSystem 用于程序安全退出时，刷新缓冲区并关闭滚动器
+func CloseLogSystem() {
+	if fileRolling != nil {
+		_ = fileRolling.Close()
 	}
 }
 

@@ -18,9 +18,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize logger: %v", err))
 	}
-	if logger.GlobalFile != nil {
-		defer logger.GlobalFile.Close()
-	}
+	defer logger.CloseLogSystem()
 
 	// 初始化存储引擎
 	db := datastore.NewGodisDB()
