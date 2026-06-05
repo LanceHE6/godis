@@ -41,6 +41,9 @@ func main() {
 	// 将 aof 实例也注册到命令层的上下文，方便后续提供“手动重写”命令
 	commands.GlobalAof = aof
 
+	// 启动全局 GC 协程，清理所有数据库中的过期 Key
+	datastore.StartGcWorker(dbs)
+
 	// 启动 GBD 监控协程
 	dbs[0].StartAutoRewriteWorker(aofFilename, aof)
 

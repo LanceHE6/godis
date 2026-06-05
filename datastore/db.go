@@ -27,8 +27,6 @@ func NewGodisDB() *GodisDB {
 	db := &GodisDB{
 		data: make(map[string]Item),
 	}
-	// GC 协程
-	go db.startGcWorker()
 	return db
 }
 
@@ -66,21 +64,25 @@ func (db *GodisDB) Get(key string) (string, bool) {
 	return item.Value, exists
 }
 
-// startGcWorker GC，负责在后台定期清理过期的 Key
-func (db *GodisDB) startGcWorker() {
+// StartGcWorker 全局 GC，负责在后台定期清理所有数据库中过期的 Key
+func StartGcWorker(dbs []*GodisDB) {
 	ticker := time.NewTicker(1 * time.Second)
 	log.Info("GC coroutine started successfully")
-	for range ticker.C {
-		now := time.Now()
-		db.mu.Lock()
-		for key, item := range db.data {
-			if !item.IsNeverDie && now.After(item.ExpiresAt) {
-				log.Info("clear expired key [%s]", key)
-				delete(db.data, key)
+	go func() {
+		for range ticker.C {
+			now := time.Now()
+			for i, db := range dbs {
+				db.mu.Lock()
+				for key, item := range db.data {
+					if !item.IsNeverDie && now.After(item.ExpiresAt) {
+						log.Info("clear expired key [%s] from db %d", key, i)
+						delete(db.data, key)
+					}
+				}
+				db.mu.Unlock()
 			}
 		}
-		db.mu.Unlock()
-	}
+	}()
 }
 
 // StartAutoRewriteWorker 启动后台自动重写监控协程
