@@ -8,8 +8,9 @@ import (
 	"godis/server"
 )
 
-const aofFilename = "godis.aof"
+const aofFilename = "./data/godis.aof"
 const logFilename = "./logs/godis.log"
+const dbCount = 16
 
 func main() {
 
@@ -21,10 +22,14 @@ func main() {
 	defer logger.CloseLogSystem()
 
 	// 初始化存储引擎
-	db := datastore.NewGodisDB()
+	dbs := make([]*datastore.GodisDB, dbCount)
+	for i := 0; i < dbCount; i++ {
+		dbs[i] = datastore.NewGodisDB()
+	}
 
 	// 尝试从 AOF 文件中恢复历史数据
-	commands.ReloadHistoryData(aofFilename, db)
+	// TODO需支持所有数据库恢复数据
+	commands.ReloadHistoryData(aofFilename, dbs[0])
 
 	// 初始化 AOF 记录器
 	aof, err := datastore.NewAofLogger(aofFilename)
@@ -37,9 +42,9 @@ func main() {
 	commands.GlobalAof = aof
 
 	// 启动 GBD 监控协程
-	db.StartAutoRewriteWorker(aofFilename, aof)
+	dbs[0].StartAutoRewriteWorker(aofFilename, aof)
 
 	// 创建并启动网络服务器
-	srv := server.NewServer(db, aof)
+	srv := server.NewServer(dbs, aof)
 	srv.Start("0.0.0.0:6379")
 }

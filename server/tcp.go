@@ -16,13 +16,13 @@ import (
 var log = logger.NewModuleLogger("SERVER")
 
 type Server struct {
-	db  *datastore.GodisDB
+	dbs []*datastore.GodisDB // 数据库切片，支持多数据库
 	aof *datastore.AofLogger
 }
 
 // NewServer 接收 aof 参数
-func NewServer(db *datastore.GodisDB, aof *datastore.AofLogger) *Server {
-	return &Server{db: db, aof: aof}
+func NewServer(dbs []*datastore.GodisDB, aof *datastore.AofLogger) *Server {
+	return &Server{dbs: dbs, aof: aof}
 }
 
 func (s *Server) Start(address string) {
@@ -49,6 +49,7 @@ func (s *Server) handleClient(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
+	currentDBID := 0 // 默认数据库0
 	for {
 		args, err := protocol.ParseRESP(reader)
 		if err != nil {
@@ -67,14 +68,18 @@ func (s *Server) handleClient(conn net.Conn) {
 
 		var reply string
 		if handler, exists := commands.CommandRegistry[cmdName]; exists {
+			activeDB := s.dbs[currentDBID]
 			ctx := &commands.CommandContext{
-				Args: args,
-				DB:   s.db,
+				Args:        args,
+				DB:          activeDB,
+				AllDBs:      s.dbs,
+				CurrentDBID: &currentDBID,
 			}
 			reply = handler(ctx)
 
-			// 如果命令执行成功（返回 +OK 状态），且是 SET 命令，将其落盘！
-			if cmdName == "SET" && strings.HasPrefix(reply, "+OK") {
+			// 持久化 AOF 过滤（这里暂定只持久化库 0 的操作）
+			// TODO 需支持所有数据库AOF
+			if cmdName == "SET" && strings.HasPrefix(reply, "+OK") && currentDBID == 0 {
 				_ = s.aof.WriteCmd(args)
 			}
 

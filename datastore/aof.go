@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -15,6 +16,13 @@ type AofLogger struct {
 }
 
 func NewAofLogger(filename string) (*AofLogger, error) {
+	dir := filepath.Dir(filename)
+	// 自动递归创建文件夹
+	// os.ModePerm 代表 0777 最高读写权限
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("failed to auto-create aof directory [%s]: %v", dir, err)
+	}
+
 	// 以读写、创建、追加模式打开文件
 	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {

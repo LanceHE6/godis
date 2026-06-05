@@ -1,27 +1,22 @@
 package commands
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
+
+	"godis/protocol"
 )
 
 func init() {
 	// 注册当前文件里的命令
-	CommandRegistry["PING"] = handlePing
 	CommandRegistry["SET"] = handleSet
 	CommandRegistry["GET"] = handleGet
-}
-
-func handlePing(ctx *CommandContext) string {
-	cmdLog.Debug("PING received")
-	return "+PONG\r\n"
 }
 
 func handleSet(ctx *CommandContext) string {
 	args := ctx.Args
 	if len(args) < 3 {
-		return "-ERR wrong number of arguments for 'set' command\r\n"
+		return protocol.MakeError("ERR wrong number of arguments for 'set' command")
 	}
 
 	key := args[1]
@@ -37,20 +32,20 @@ func handleSet(ctx *CommandContext) string {
 
 	cmdLog.Debug("SET key=%s val=%s ttl=%d", key, val, ttl)
 	ctx.DB.Set(key, val, ttl)
-	return "+OK\r\n"
+	return protocol.MakeSimpleString("OK")
 }
 
 func handleGet(ctx *CommandContext) string {
 	args := ctx.Args
 	if len(args) < 2 {
-		return "-ERR wrong number of arguments for 'get' command\r\n"
+		return protocol.MakeError("ERR wrong number of arguments for 'get' command")
 	}
 
 	key := args[1]
 	cmdLog.Debug("GET key=%s", key)
 	val, exists := ctx.DB.Get(key)
 	if !exists {
-		return "$-1\r\n"
+		return protocol.MakeNull()
 	}
-	return fmt.Sprintf("$%d\r\n%s\r\n", len(val), val)
+	return protocol.MakeBulkString(val)
 }
