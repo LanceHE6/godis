@@ -77,5 +77,5 @@ func ReloadHistoryData(filename string, dbs []*datastore.GodisDB) {
 			count++
 		}
 	}
-	log.Info("data recovery completed, replayed %d commands across all databases", count)
+	log.Debug("data recovery completed, replayed %d commands across all databases", count)
 }

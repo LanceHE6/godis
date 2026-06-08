@@ -66,7 +66,7 @@ func (db *GodisDB) Get(key string) (string, bool) {
 // StartGcWorker 全局 GC，负责在后台定期清理所有数据库中过期的 Key
 func StartGcWorker(dbs []*GodisDB) {
 	ticker := time.NewTicker(1 * time.Second)
-	log.Info("GC coroutine started successfully")
+	log.Debug("GC coroutine started successfully")
 	go func() {
 		for range ticker.C {
 			now := time.Now()

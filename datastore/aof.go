@@ -95,7 +95,7 @@ func (aof *AofLogger) RewriteToHybrid(dbs []*GodisDB) error {
 	fileInfo, _ := file.Stat()
 	aof.lastRewriteSize = fileInfo.Size()
 
-	log.Info("GDB snapshot created successfully.")
+	log.Debug("GDB snapshot created successfully.")
 	return nil
 }
 
@@ -118,7 +118,7 @@ func (aof *AofLogger) Close() {
 // dbs: 所有数据库实例
 func StartAutoRewriteWorker(filename string, aofLogger *AofLogger, dbs []*GodisDB) {
 	ticker := time.NewTicker(10 * time.Second)
-	log.Info("AOF coroutine started successfully")
+	log.Debug("AOF coroutine started successfully")
 
 	// 绝对增量上限：只要新写满 64MB 的文本命令，不管比例到没到，必须重写
 	const maxAbsoluteGrowthBytes int64 = 64 * 1024 * 1024
@@ -146,7 +146,7 @@ func StartAutoRewriteWorker(filename string, aofLogger *AofLogger, dbs []*GodisD
 
 			// 只有当新追加的文本命令体积，达到了硬上限或达到了上一次总大小的 50% 时，才触发重写
 			if growthBytes >= maxAbsoluteGrowthBytes || (float64(growthBytes)/float64(lastSize) >= 0.5) {
-				log.Info("AOF has been triggered")
+				log.Debug("AOF has been triggered")
 				_ = aofLogger.RewriteToHybrid(dbs)
 			}
 		}

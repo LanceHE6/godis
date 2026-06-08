@@ -24,7 +24,7 @@ const banner = `
 
 func main() {
 	fmt.Print(banner)
-	fmt.Printf("  Version: %s  Build: %s  Commit: %s\n\n", version.Version, version.BuildTime, version.GitCommit)
+	fmt.Printf("  Version: %s  Build: %s  Commit: %s\n", version.Version, version.BuildTime, version.GitCommit)
 
 	// 初始化日志引擎
 	err := logger.InitGlobalLogger(logFilename, logger.LevelInfo)
