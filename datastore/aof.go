@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 type AofLogger struct {
@@ -35,11 +36,19 @@ func NewAofLogger(filename string) (*AofLogger, error) {
 }
 
 // WriteCmd 向文件末尾追加 RESP 文本命令
-func (aof *AofLogger) WriteCmd(args []string) error {
+// dbID 为当前操作的数据库编号，非 0 时自动前插 SELECT 命令
+func (aof *AofLogger) WriteCmd(args []string, dbID int) error {
 	aof.mu.Lock()
 	defer aof.mu.Unlock()
 
-	resp := fmt.Sprintf("*%d\r\n", len(args))
+	var resp string
+
+	// 非 db0 时，先写一条 SELECT 命令标记切换库
+	if dbID != 0 {
+		resp += fmt.Sprintf("*2\r\n$6\r\nSELECT\r\n$%d\r\n%d\r\n", len(fmt.Sprintf("%d", dbID)), dbID)
+	}
+
+	resp += fmt.Sprintf("*%d\r\n", len(args))
 	for _, arg := range args {
 		resp += fmt.Sprintf("$%d\r\n%s\r\n", len(arg), arg)
 	}
@@ -49,27 +58,26 @@ func (aof *AofLogger) WriteCmd(args []string) error {
 }
 
 // RewriteToHybrid 触发混合持久化重写
-// 它会把当前的内存 db 拍成二进制快照写在文件开头，并保持文件句柄可用
-func (aof *AofLogger) RewriteToHybrid(db *GodisDB) error {
+// 它会把所有内存 db 拍成二进制快照写在文件开头，并保持文件句柄可用
+func (aof *AofLogger) RewriteToHybrid(dbs []*GodisDB) error {
 	aof.mu.Lock()
 	defer aof.mu.Unlock()
 
-	// 1. 先把原有的 AOF 文件句柄关闭，因为要重写整个文件
+	// 先把原有的 AOF 文件句柄关闭，因为要重写整个文件
 	aof.file.Close()
 
-	// 2. 创建一个临时的内存缓冲区，先把二进制 GDB 写进去
+	// 创建一个临时的内存缓冲区，先把二进制 GDB 写进去
 	var buf bytes.Buffer
 
-	// 在二进制头部写入一个我们自定义的魔数（Magic Number）标记
-	// 用来在启动时区分这个文件是“纯文本AOF”还是“混合AOF”
+	// 用来在启动时区分这个文件是"纯文本AOF"还是"混合AOF"
 	buf.Write([]byte("GODIS-HYBRID\n"))
 
-	// GDB 序列化方法
-	if err := db.SaveToBinary(&buf); err != nil {
+	// GDB 序列化方法，保存所有数据库
+	if err := SaveAllToBinary(&buf, dbs); err != nil {
 		return fmt.Errorf("failed to serialize GDB: %v", err)
 	}
 
-	// 3. 以截断清空（O_TRUNC）的模式重新打开 AOF 文件，写入二进制数据
+	// 以截断清空（O_TRUNC）的模式重新打开 AOF 文件，写入二进制数据
 	file, err := os.OpenFile(aof.filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
@@ -81,7 +89,7 @@ func (aof *AofLogger) RewriteToHybrid(db *GodisDB) error {
 		return err
 	}
 
-	// 4. 将持久化句柄重新切换回原来的文件，后续的客户端命令可以继续在这个文件末尾追加了
+	// 将持久化句柄重新切换回原来的文件，后续的客户端命令可以继续在这个文件末尾追加了
 	aof.file = file
 
 	fileInfo, _ := file.Stat()
@@ -102,4 +110,45 @@ func (aof *AofLogger) Close() {
 	if aof.file != nil {
 		aof.file.Close()
 	}
+}
+
+// StartAutoRewriteWorker 启动后台自动重写监控协程，适配多数据库
+// filename: 需要监控的 AOF 文件名
+// aofLogger: 持久化组件实例
+// dbs: 所有数据库实例
+func StartAutoRewriteWorker(filename string, aofLogger *AofLogger, dbs []*GodisDB) {
+	ticker := time.NewTicker(10 * time.Second)
+	log.Info("AOF coroutine started successfully")
+
+	// 绝对增量上限：只要新写满 64MB 的文本命令，不管比例到没到，必须重写
+	const maxAbsoluteGrowthBytes int64 = 64 * 1024 * 1024
+
+	go func() {
+		for range ticker.C {
+			fileInfo, err := os.Stat(filename)
+			if err != nil {
+				continue
+			}
+
+			currentSize := fileInfo.Size()
+			lastSize := aofLogger.GetLastRewriteSize()
+
+			// 上一次重写大小为 0，给予2k初始线
+			if lastSize == 0 {
+				if currentSize >= 2*1024 {
+					_ = aofLogger.RewriteToHybrid(dbs)
+				}
+				continue
+			}
+
+			// 计算当前的增长量
+			growthBytes := currentSize - lastSize
+
+			// 只有当新追加的文本命令体积，达到了硬上限或达到了上一次总大小的 50% 时，才触发重写
+			if growthBytes >= maxAbsoluteGrowthBytes || (float64(growthBytes)/float64(lastSize) >= 0.5) {
+				log.Info("AOF has been triggered")
+				_ = aofLogger.RewriteToHybrid(dbs)
+			}
+		}
+	}()
 }

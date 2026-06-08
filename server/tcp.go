@@ -77,10 +77,9 @@ func (s *Server) handleClient(conn net.Conn) {
 			}
 			reply = handler(ctx)
 
-			// 持久化 AOF 过滤（这里暂定只持久化库 0 的操作）
-			// TODO 需支持所有数据库AOF
-			if cmdName == "SET" && strings.HasPrefix(reply, "+OK") && currentDBID == 0 {
-				_ = s.aof.WriteCmd(args)
+			// 持久化 AOF（所有数据库均写入，非 db0 自动携带 SELECT）
+			if cmdName == "SET" && strings.HasPrefix(reply, "+OK") {
+				_ = s.aof.WriteCmd(args, currentDBID)
 			}
 
 		} else {

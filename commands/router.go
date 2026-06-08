@@ -36,8 +36,8 @@ func init() {
 			return protocol.MakeError("ERR AOF logger not initialized")
 		}
 
-		// 触发数据二进制写入
-		err := GlobalAof.RewriteToHybrid(ctx.DB)
+		// 触发所有数据库的二进制写入
+		err := GlobalAof.RewriteToHybrid(ctx.AllDBs)
 		if err != nil {
 			return protocol.MakeError(fmt.Sprintf("ERR Rewrite failed: %v", err))
 		}

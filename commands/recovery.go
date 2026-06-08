@@ -13,8 +13,8 @@ import (
 
 var log = logger.NewModuleLogger("RECOVERY")
 
-// ReloadHistoryData 从指定的 AOF 文件中分析格式并恢复历史数据
-func ReloadHistoryData(filename string, db *datastore.GodisDB) {
+// ReloadHistoryData 从指定的 AOF 文件中分析格式并恢复历史数据，适配多数据库
+func ReloadHistoryData(filename string, dbs []*datastore.GodisDB) {
 	file, err := os.Open(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -27,14 +27,14 @@ func ReloadHistoryData(filename string, db *datastore.GodisDB) {
 
 	reader := bufio.NewReader(file)
 
-	// 识别是“纯文本”还是“GDB 混合二进制”
+	// 识别是"纯文本"还是"GDB 混合二进制"
 	firstLine, err := reader.ReadString('\n')
 	if err != nil {
 		return
 	}
 
 	if strings.TrimSpace(firstLine) == "GODIS-HYBRID" {
-		if err := db.LoadFromBinary(reader); err != nil {
+		if err := datastore.LoadAllFromBinary(reader, dbs); err != nil {
 			log.Error("failed to load GDB binary snapshot: %v", err)
 			return
 		}
@@ -46,7 +46,9 @@ func ReloadHistoryData(filename string, db *datastore.GodisDB) {
 		reader = bufio.NewReader(file)
 	}
 
-	// 2. 无情重放后续（或全量）的 RESP 文本追加指令
+	// 重放后续（或全量）的 RESP 文本追加指令
+	// 用 currentDBID 跟踪当前正在操作的数据库，SELECT 命令会修改它
+	currentDBID := 0
 	count := 0
 	for {
 		args, err := protocol.ParseRESP(reader)
@@ -66,12 +68,14 @@ func ReloadHistoryData(filename string, db *datastore.GodisDB) {
 		// 去命令层的全局注册表里寻找对应的 Handler
 		if handler, exists := CommandRegistry[cmdName]; exists {
 			ctx := &CommandContext{
-				Args: args,
-				DB:   db,
+				Args:        args,
+				DB:          dbs[currentDBID],
+				AllDBs:      dbs,
+				CurrentDBID: &currentDBID,
 			}
-			handler(ctx) // 悄悄执行，不需要走 TCP 网络网络吞吐
+			handler(ctx)
 			count++
 		}
 	}
-	log.Info("data recovery completed")
+	log.Info("data recovery completed, replayed %d commands across all databases", count)
 }

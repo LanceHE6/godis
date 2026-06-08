@@ -14,49 +14,63 @@ type GobItem struct {
 	IsNeverDie bool
 }
 
-// SaveToBinary 将当前内存数据库的所有数据，以二进制 Gob 格式写入指定的写入器（如文件）
-func (db *GodisDB) SaveToBinary(w io.Writer) error {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	// 过滤掉已经过期的数据，只打包活着的键值对
-	now := time.Now()
-	cleanData := make(map[string]GobItem)
-
-	for k, v := range db.data {
-		if !v.IsNeverDie && now.After(v.ExpiresAt) {
-			continue // 已过期的跳过，不写入快照
-		}
-		cleanData[k] = GobItem{
-			Value:      v.Value,
-			ExpiresAt:  v.ExpiresAt,
-			IsNeverDie: v.IsNeverDie,
-		}
-	}
-
-	// 使用 Gob 编码器将 map 整体转为二进制流写入
-	encoder := gob.NewEncoder(w)
-	return encoder.Encode(cleanData)
+// AllDbsSnapshot 用于序列化所有数据库的快照结构
+type AllDbsSnapshot struct {
+	DBs []map[string]GobItem
 }
 
-// LoadFromBinary 从二进制 Gob 流中恢复数据到内存
-func (db *GodisDB) LoadFromBinary(r io.Reader) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+// SaveAllToBinary 将所有数据库序列化为二进制 Gob 格式
+func SaveAllToBinary(w io.Writer, dbs []*GodisDB) error {
+	snapshot := AllDbsSnapshot{
+		DBs: make([]map[string]GobItem, len(dbs)),
+	}
+	now := time.Now()
 
-	var decodedData map[string]GobItem
+	// 复制整个数据库
+	for i, db := range dbs {
+		db.mu.RLock()
+		cleanData := make(map[string]GobItem)
+		for k, v := range db.data {
+			if !v.IsNeverDie && now.After(v.ExpiresAt) {
+				continue
+			}
+			cleanData[k] = GobItem{
+				Value:      v.Value,
+				ExpiresAt:  v.ExpiresAt,
+				IsNeverDie: v.IsNeverDie,
+			}
+		}
+		db.mu.RUnlock()
+		snapshot.DBs[i] = cleanData
+	}
+
+	// 转换为二进制
+	encoder := gob.NewEncoder(w)
+	return encoder.Encode(snapshot)
+}
+
+// LoadAllFromBinary 从二进制 Gob 流中恢复所有数据库
+func LoadAllFromBinary(r io.Reader, dbs []*GodisDB) error {
+	var snapshot AllDbsSnapshot
 	decoder := gob.NewDecoder(r)
-	if err := decoder.Decode(&decodedData); err != nil {
+	if err := decoder.Decode(&snapshot); err != nil {
 		return err
 	}
 
-	// 还原到原生的数据库 map 中
-	for k, v := range decodedData {
-		db.data[k] = Item{
-			Value:      v.Value,
-			ExpiresAt:  v.ExpiresAt,
-			IsNeverDie: v.IsNeverDie,
+	// 逐一恢复数据库数据
+	for i, data := range snapshot.DBs {
+		if i >= len(dbs) {
+			break
 		}
+		dbs[i].mu.Lock()
+		for k, v := range data {
+			dbs[i].data[k] = Item{
+				Value:      v.Value,
+				ExpiresAt:  v.ExpiresAt,
+				IsNeverDie: v.IsNeverDie,
+			}
+		}
+		dbs[i].mu.Unlock()
 	}
 	return nil
 }

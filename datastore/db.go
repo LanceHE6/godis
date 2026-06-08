@@ -2,7 +2,6 @@ package datastore
 
 import (
 	"godis/logger"
-	"os"
 	"sync"
 	"time"
 )
@@ -80,47 +79,6 @@ func StartGcWorker(dbs []*GodisDB) {
 					}
 				}
 				db.mu.Unlock()
-			}
-		}
-	}()
-}
-
-// StartAutoRewriteWorker 启动后台自动重写监控协程
-// filename: 需要监控的 AOF 文件名
-// aofLogger: 持久化组件实例
-func (db *GodisDB) StartAutoRewriteWorker(filename string, aofLogger *AofLogger) {
-	ticker := time.NewTicker(10 * time.Second)
-	log.Info("AOF coroutine started successfully")
-
-	// 绝对增量上限：只要新写满 64MB 的文本命令，不管比例到没到，必须重写
-	const maxAbsoluteGrowthBytes int64 = 64 * 1024 * 1024 // 1MB
-
-	go func() {
-		for range ticker.C {
-			fileInfo, err := os.Stat(filename)
-			if err != nil {
-				continue
-			}
-
-			currentSize := fileInfo.Size()
-			lastSize := aofLogger.GetLastRewriteSize()
-
-			// 上一次重写大小为 0，给予2k初始线
-			if lastSize == 0 {
-				if currentSize >= 2*1024 { // 超过 2KB 先触发第一次
-					_ = aofLogger.RewriteToHybrid(db)
-				}
-				continue
-			}
-
-			// 计算当前的增长量
-			growthBytes := currentSize - lastSize
-
-			// 只有当新追加的文本命令体积，达到了硬上限或达到了上一次总大小的 50% 时，才触发重写
-			// 比如上次重写后是 3KB，必须等文件涨到 4.5KB 以上，才会触发下一次瘦身
-			if growthBytes >= maxAbsoluteGrowthBytes || (float64(growthBytes)/float64(lastSize) >= 0.5) {
-				log.Info("AOF has been triggered")
-				_ = aofLogger.RewriteToHybrid(db)
 			}
 		}
 	}()

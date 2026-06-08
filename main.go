@@ -27,10 +27,6 @@ func main() {
 		dbs[i] = datastore.NewGodisDB()
 	}
 
-	// 尝试从 AOF 文件中恢复历史数据
-	// TODO需支持所有数据库恢复数据
-	commands.ReloadHistoryData(aofFilename, dbs[0])
-
 	// 初始化 AOF 记录器
 	aof, err := datastore.NewAofLogger(aofFilename)
 	if err != nil {
@@ -38,14 +34,17 @@ func main() {
 	}
 	defer aof.Close()
 
-	// 将 aof 实例也注册到命令层的上下文，方便后续提供“手动重写”命令
+	// 尝试从 AOF 文件中恢复历史数据（支持多数据库）
+	commands.ReloadHistoryData(aofFilename, dbs)
+
+	// 将 aof 实例也注册到命令层的上下文，方便后续提供"手动重写"命令
 	commands.GlobalAof = aof
 
 	// 启动全局 GC 协程，清理所有数据库中的过期 Key
 	datastore.StartGcWorker(dbs)
 
-	// 启动 GBD 监控协程
-	dbs[0].StartAutoRewriteWorker(aofFilename, aof)
+	// 启动 AOF 自动重写监控协程（适配多数据库）
+	datastore.StartAutoRewriteWorker(aofFilename, aof, dbs)
 
 	// 创建并启动网络服务器
 	srv := server.NewServer(dbs, aof)
