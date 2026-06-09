@@ -2,14 +2,37 @@ package datastore
 
 import (
 	"encoding/gob"
+	"godis/types"
 	"io"
 	"time"
 )
 
-// GobItem 专门用于二进制传输的结构体
-// 因为 time.Time 默认支持 Gob 序列化，我们直接复用
+// ── Gob 序列化用的快照结构（不含 mutex） ──
+
+type GobStringSnapshot struct {
+	Value string
+}
+
+type GobHashSnapshot struct {
+	Fields map[string]string
+}
+
+type GobListSnapshot struct {
+	Values []string
+}
+
+type GobSetSnapshot struct {
+	Members []string
+}
+
+type GobZSetSnapshot struct {
+	Members []types.ZSetMember
+}
+
+// GobItem 用于二进制传输的数据项
 type GobItem struct {
-	Value      string
+	Type       types.DataType
+	Value      interface{} // *GobStringSnapshot / *GobHashSnapshot / *GobListSnapshot / *GobSetSnapshot / *GobZSetSnapshot
 	ExpiresAt  time.Time
 	IsNeverDie bool
 }
@@ -19,6 +42,74 @@ type AllDbsSnapshot struct {
 	DBs []map[string]GobItem
 }
 
+func init() {
+	gob.Register(&GobStringSnapshot{})
+	gob.Register(&GobHashSnapshot{})
+	gob.Register(&GobListSnapshot{})
+	gob.Register(&GobSetSnapshot{})
+	gob.Register(&GobZSetSnapshot{})
+}
+
+// toGobValue 将运行时 Value 转换为可序列化的快照
+func toGobValue(t types.DataType, v interface{}) interface{} {
+	switch t {
+	case types.TypeString:
+		return &GobStringSnapshot{Value: v.(*types.StringValue).Value}
+	case types.TypeHash:
+		hv := v.(*types.HashValue)
+		hv.Mu.RLock()
+		fields := make(map[string]string, len(hv.Fields))
+		for k, val := range hv.Fields {
+			fields[k] = val
+		}
+		hv.Mu.RUnlock()
+		return &GobHashSnapshot{Fields: fields}
+	case types.TypeList:
+		lv := v.(*types.ListValue)
+		return &GobListSnapshot{Values: lv.Data()}
+	case types.TypeSet:
+		sv := v.(*types.SetValue)
+		return &GobSetSnapshot{Members: sv.MembersList()}
+	case types.TypeZSet:
+		zv := v.(*types.ZSetValue)
+		return &GobZSetSnapshot{Members: zv.Data()}
+	}
+	return v
+}
+
+// fromGobValue 将序列化的快照还原为运行时 Value
+func fromGobValue(t types.DataType, v interface{}) interface{} {
+	switch t {
+	case types.TypeString:
+		return types.NewStringValue(v.(*GobStringSnapshot).Value)
+	case types.TypeHash:
+		snap := v.(*GobHashSnapshot)
+		hv := types.NewHashValue()
+		hv.Fields = snap.Fields
+		return hv
+	case types.TypeList:
+		snap := v.(*GobListSnapshot)
+		lv := types.NewListValue()
+		if len(snap.Values) > 0 {
+			lv.Load(snap.Values)
+		}
+		return lv
+	case types.TypeSet:
+		snap := v.(*GobSetSnapshot)
+		sv := types.NewSetValue()
+		if len(snap.Members) > 0 {
+			sv.Add(snap.Members...)
+		}
+		return sv
+	case types.TypeZSet:
+		snap := v.(*GobZSetSnapshot)
+		zv := types.NewZSetValue()
+		zv.Load(snap.Members)
+		return zv
+	}
+	return v
+}
+
 // SaveAllToBinary 将所有数据库序列化为二进制 Gob 格式
 func SaveAllToBinary(w io.Writer, dbs []*GodisDB) error {
 	snapshot := AllDbsSnapshot{
@@ -26,7 +117,6 @@ func SaveAllToBinary(w io.Writer, dbs []*GodisDB) error {
 	}
 	now := time.Now()
 
-	// 复制整个数据库
 	for i, db := range dbs {
 		db.mu.RLock()
 		cleanData := make(map[string]GobItem)
@@ -35,7 +125,8 @@ func SaveAllToBinary(w io.Writer, dbs []*GodisDB) error {
 				continue
 			}
 			cleanData[k] = GobItem{
-				Value:      v.Value,
+				Type:       v.Type,
+				Value:      toGobValue(v.Type, v.Value),
 				ExpiresAt:  v.ExpiresAt,
 				IsNeverDie: v.IsNeverDie,
 			}
@@ -44,7 +135,6 @@ func SaveAllToBinary(w io.Writer, dbs []*GodisDB) error {
 		snapshot.DBs[i] = cleanData
 	}
 
-	// 转换为二进制
 	encoder := gob.NewEncoder(w)
 	return encoder.Encode(snapshot)
 }
@@ -57,7 +147,6 @@ func LoadAllFromBinary(r io.Reader, dbs []*GodisDB) error {
 		return err
 	}
 
-	// 逐一恢复数据库数据
 	for i, data := range snapshot.DBs {
 		if i >= len(dbs) {
 			break
@@ -65,7 +154,8 @@ func LoadAllFromBinary(r io.Reader, dbs []*GodisDB) error {
 		dbs[i].mu.Lock()
 		for k, v := range data {
 			dbs[i].data[k] = Item{
-				Value:      v.Value,
+				Type:       v.Type,
+				Value:      fromGobValue(v.Type, v.Value),
 				ExpiresAt:  v.ExpiresAt,
 				IsNeverDie: v.IsNeverDie,
 			}
