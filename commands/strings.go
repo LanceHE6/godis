@@ -8,9 +8,8 @@ import (
 )
 
 func init() {
-	// 注册当前文件里的命令
-	CommandRegistry["SET"] = handleSet
-	CommandRegistry["GET"] = handleGet
+	Register("SET", -3, "write", 1, 1, 1, handleSet)
+	Register("GET", 2, "readonly", 1, 1, 1, handleGet)
 }
 
 func handleSet(ctx *CommandContext) string {

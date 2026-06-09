@@ -66,14 +66,14 @@ func ReloadHistoryData(filename string, dbs []*datastore.GodisDB) {
 
 		cmdName := strings.ToUpper(args[0])
 		// 去命令层的全局注册表里寻找对应的 Handler
-		if handler, exists := CommandRegistry[cmdName]; exists {
+		if cmd, exists := CommandRegistry[cmdName]; exists {
 			ctx := &CommandContext{
 				Args:        args,
 				DB:          dbs[currentDBID],
 				AllDBs:      dbs,
 				CurrentDBID: &currentDBID,
 			}
-			handler(ctx)
+			cmd.Handler(ctx)
 			count++
 		}
 	}

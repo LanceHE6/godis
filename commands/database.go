@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	CommandRegistry["SELECT"] = handleSelect
+	Register("SELECT", 2, "fast", 0, 0, 0, handleSelect)
 }
 
 func handleSelect(ctx *CommandContext) string {

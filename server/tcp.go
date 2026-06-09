@@ -67,7 +67,7 @@ func (s *Server) handleClient(conn net.Conn) {
 		cmdName := strings.ToUpper(args[0])
 
 		var reply string
-		if handler, exists := commands.CommandRegistry[cmdName]; exists {
+		if cmd, exists := commands.CommandRegistry[cmdName]; exists {
 			activeDB := s.dbs[currentDBID]
 			ctx := &commands.CommandContext{
 				Args:        args,
@@ -76,7 +76,7 @@ func (s *Server) handleClient(conn net.Conn) {
 				CurrentDBID: &currentDBID,
 				Aof:         s.aof,
 			}
-			reply = handler(ctx)
+			reply = cmd.Handler(ctx)
 
 			// 持久化 AOF（所有数据库均写入，非 db0 自动携带 SELECT）
 			if cmdName == "SET" && strings.HasPrefix(reply, "+OK") {
