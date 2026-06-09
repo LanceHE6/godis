@@ -125,6 +125,26 @@ func (db *GodisDB) TypeOf(key string) types.DataType {
 	return item.Type
 }
 
+// DBStats 数据库统计信息
+type DBStats struct {
+	Keys    int
+	Expires int // 设有过期时间的 key 数量
+}
+
+// Stats 返回当前数据库的统计信息
+func (db *GodisDB) Stats() DBStats {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	var s DBStats
+	s.Keys = len(db.data)
+	for _, item := range db.data {
+		if !item.IsNeverDie {
+			s.Expires++
+		}
+	}
+	return s
+}
+
 // Keys 返回所有 key（用于 KEYS 命令）
 func (db *GodisDB) Keys() []string {
 	db.mu.RLock()

@@ -17,7 +17,7 @@ var log = logger.NewModuleLogger("SERVER")
 
 type Server struct {
 	dbs []*datastore.GodisDB // 数据库切片，支持多数据库
-	aof *datastore.AofLogger
+	aof *datastore.AofLogger // aof命令日志记录
 }
 
 // NewServer 接收 aof 参数
@@ -74,6 +74,7 @@ func (s *Server) handleClient(conn net.Conn) {
 				DB:          activeDB,
 				AllDBs:      s.dbs,
 				CurrentDBID: &currentDBID,
+				Aof:         s.aof,
 			}
 			reply = handler(ctx)
 

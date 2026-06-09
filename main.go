@@ -49,9 +49,6 @@ func main() {
 	// 尝试从 AOF 文件中恢复历史数据（支持多数据库）
 	commands.ReloadHistoryData(aofFilename, dbs)
 
-	// 将 aof 实例也注册到命令层的上下文，方便后续提供"手动重写"命令
-	commands.GlobalAof = aof
-
 	// 启动全局 GC 协程，清理所有数据库中的过期 Key
 	datastore.StartGcWorker(dbs)
 
