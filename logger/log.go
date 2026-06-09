@@ -27,6 +27,21 @@ var levelNames = map[Level]string{
 	LevelError: "ERROR",
 }
 
+var levelMap = map[string]Level{
+	"debug": LevelDebug,
+	"info":  LevelInfo,
+	"warn":  LevelWarn,
+	"error": LevelError,
+}
+
+// ParseLevel 将字符串转为日志级别，无法识别时返回 LevelInfo
+func ParseLevel(s string) Level {
+	if lvl, ok := levelMap[strings.ToLower(s)]; ok {
+		return lvl
+	}
+	return LevelInfo
+}
+
 // 全局变量
 var (
 	fileRolling *lumberjack.Logger
