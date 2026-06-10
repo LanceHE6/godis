@@ -1,20 +1,21 @@
-package commands
+package recovery
 
 import (
 	"bufio"
-	"godis/datastore"
-	"godis/logger"
 	"io"
 	"os"
 	"strings"
 
+	"godis/commands"
+	"godis/datastore"
+	"godis/logger"
 	"godis/protocol"
 )
 
 var log = logger.NewModuleLogger("RECOVERY")
 
 // ReloadHistoryData 从指定的 AOF 文件中分析格式并恢复历史数据，适配多数据库
-func ReloadHistoryData(filename string, dbs []*datastore.GodisDB) {
+func ReloadHistoryData(filename string, dbs []*datastore.GodisDB, registry map[string]commands.Command) {
 	file, err := os.Open(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -66,8 +67,8 @@ func ReloadHistoryData(filename string, dbs []*datastore.GodisDB) {
 
 		cmdName := strings.ToUpper(args[0])
 		// 去命令层的全局注册表里寻找对应的 Handler
-		if cmd, exists := CommandRegistry[cmdName]; exists {
-			ctx := &CommandContext{
+		if cmd, exists := registry[cmdName]; exists {
+			ctx := &commands.CommandContext{
 				Args:        args,
 				DB:          dbs[currentDBID],
 				AllDBs:      dbs,

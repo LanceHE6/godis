@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// ParseRESP 从reader中解析命令
+// ParseRESP 从 reader 中解析命令，支持 RESP 协议和 inline 模式
 func ParseRESP(reader *bufio.Reader) ([]string, error) {
 	line, err := reader.ReadString('\n')
 	if err != nil {
@@ -20,11 +20,18 @@ func ParseRESP(reader *bufio.Reader) ([]string, error) {
 		return nil, fmt.Errorf("received an empty line")
 	}
 
-	if line[0] != '*' {
-		return nil, fmt.Errorf("invalid protocol")
+	// RESP 协议：以 * 开头的数组格式
+	if line[0] == '*' {
+		return parseRESPArray(line, reader)
 	}
 
-	arrayLen, err := strconv.Atoi(line[1:])
+	// inline 模式：按空格拆分（redis-cli 等客户端在部分场景下使用）
+	return parseInline(line), nil
+}
+
+// parseRESPArray 解析 RESP 多条批量数组
+func parseRESPArray(firstLine string, reader *bufio.Reader) ([]string, error) {
+	arrayLen, err := strconv.Atoi(firstLine[1:])
 	if err != nil || arrayLen <= 0 {
 		return nil, fmt.Errorf("invalid array length")
 	}
@@ -58,4 +65,9 @@ func ParseRESP(reader *bufio.Reader) ([]string, error) {
 	}
 
 	return args, nil
+}
+
+// parseInline 解析 inline 命令（如 "SET key value"）
+func parseInline(line string) []string {
+	return strings.Fields(line)
 }

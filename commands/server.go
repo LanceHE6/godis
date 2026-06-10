@@ -9,8 +9,11 @@ import (
 )
 
 func init() {
+	// 获取服务器信息和统计数据
 	Register("INFO", -1, "fast", 0, 0, 0, handleInfo)
+	// 手动触发 AOF 混合持久化重写
 	Register("BGREWRITEAOF", 1, "admin", 0, 0, 0, handleBGRewriteAOF)
+	// 获取所有命令的详细信息，支持 COUNT/INFO/GETKEYS 子命令
 	Register("COMMAND", -1, "fast", 0, 0, 0, handleCommand)
 }
 
@@ -28,8 +31,6 @@ func handleBGRewriteAOF(ctx *CommandContext) string {
 }
 
 func handleInfo(ctx *CommandContext) string {
-	cmdLog.Debug("INFO received")
-
 	var section string
 	if len(ctx.Args) > 1 {
 		section = strings.ToLower(ctx.Args[1])
@@ -65,8 +66,6 @@ func handleInfo(ctx *CommandContext) string {
 }
 
 func handleCommand(ctx *CommandContext) string {
-	cmdLog.Debug("COMMAND received")
-
 	if len(ctx.Args) < 2 {
 		return commandInfoAll()
 	}

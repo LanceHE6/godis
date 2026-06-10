@@ -6,6 +6,7 @@ import (
 	"godis/config"
 	"godis/datastore"
 	"godis/logger"
+	"godis/recovery"
 	"godis/server"
 	"godis/version"
 )
@@ -49,8 +50,8 @@ func main() {
 	}
 	defer aof.Close()
 
-	// 尝试从 AOF 文件中恢复历史数据（支持多数据库）
-	commands.ReloadHistoryData(cfg.AofFile, dbs)
+	// 从 AOF 文件中恢复历史数据（支持多数据库）
+	recovery.ReloadHistoryData(cfg.AofFile, dbs, commands.CommandRegistry)
 
 	// 启动全局 GC 协程，清理所有数据库中的过期 Key
 	datastore.StartGcWorker(dbs)

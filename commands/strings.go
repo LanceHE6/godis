@@ -8,7 +8,9 @@ import (
 )
 
 func init() {
+	// 设置 key 的值，支持 EX 参数设置过期时间（秒）
 	Register("SET", -3, "write", 1, 1, 1, handleSet)
+	// 获取 key 对应的值
 	Register("GET", 2, "readonly", 1, 1, 1, handleGet)
 }
 
@@ -29,7 +31,6 @@ func handleSet(ctx *CommandContext) string {
 		}
 	}
 
-	cmdLog.Debug("SET key=%s val=%s ttl=%d", key, val, ttl)
 	ctx.DB.Set(key, val, ttl)
 	return protocol.MakeSimpleString("OK")
 }
@@ -41,7 +42,6 @@ func handleGet(ctx *CommandContext) string {
 	}
 
 	key := args[1]
-	cmdLog.Debug("GET key=%s", key)
 	val, exists := ctx.DB.Get(key)
 	if !exists {
 		return protocol.MakeNull()

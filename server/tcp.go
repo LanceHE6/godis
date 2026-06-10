@@ -3,13 +3,13 @@ package server
 import (
 	"bufio"
 	"fmt"
-	"godis/logger"
 	"io"
 	"net"
 	"strings"
 
 	"godis/commands"
 	"godis/datastore"
+	"godis/logger"
 	"godis/protocol"
 )
 
@@ -46,7 +46,11 @@ func (s *Server) Start(address string) {
 }
 
 func (s *Server) handleClient(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		log.Info("client disconnected: %s", conn.RemoteAddr())
+		conn.Close()
+	}()
+	log.Info("new client connected: %s", conn.RemoteAddr())
 	reader := bufio.NewReader(conn)
 
 	currentDBID := 0 // 默认数据库0
@@ -66,23 +70,20 @@ func (s *Server) handleClient(conn net.Conn) {
 
 		cmdName := strings.ToUpper(args[0])
 
-		var reply string
-		if cmd, exists := commands.CommandRegistry[cmdName]; exists {
-			activeDB := s.dbs[currentDBID]
-			ctx := &commands.CommandContext{
-				Args:        args,
-				DB:          activeDB,
-				AllDBs:      s.dbs,
-				CurrentDBID: &currentDBID,
-				Aof:         s.aof,
-			}
-			reply = cmd.Handler(ctx)
+		ctx := &commands.CommandContext{
+			Args:        args,
+			DB:          s.dbs[currentDBID],
+			AllDBs:      s.dbs,
+			CurrentDBID: &currentDBID,
+			Aof:         s.aof,
+		}
 
-			// 持久化 AOF（所有数据库均写入，非 db0 自动携带 SELECT）
-			if cmdName == "SET" && strings.HasPrefix(reply, "+OK") {
+		reply, cmd, ok := commands.Execute(cmdName, ctx)
+		if ok {
+			// 写类型命令且执行成功时持久化 AOF（非 db0 自动携带 SELECT）
+			if strings.Contains(cmd.Flags, "write") && strings.HasPrefix(reply, "+OK") {
 				_ = s.aof.WriteCmd(args, currentDBID)
 			}
-
 		} else {
 			reply = fmt.Sprintf("-ERR unknown command '%s'\r\n", cmdName)
 		}
