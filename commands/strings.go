@@ -9,9 +9,9 @@ import (
 
 func init() {
 	// 设置 key 的值，支持 EX 参数设置过期时间（秒）
-	Register("SET", -3, "write", 1, 1, 1, handleSet)
+	Register("SET", -3, FlagWrite, 1, 1, 1, handleSet)
 	// 获取 key 对应的值
-	Register("GET", 2, "readonly", 1, 1, 1, handleGet)
+	Register("GET", 2, FlagReadonly, 1, 1, 1, handleGet)
 }
 
 func handleSet(ctx *CommandContext) string {

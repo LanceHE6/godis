@@ -9,7 +9,7 @@ import (
 
 func init() {
 	// 切换当前连接的数据库
-	Register("SELECT", 2, "fast", 0, 0, 0, handleSelect)
+	Register("SELECT", 2, FlagFast, 0, 0, 0, handleSelect)
 }
 
 func handleSelect(ctx *CommandContext) string {

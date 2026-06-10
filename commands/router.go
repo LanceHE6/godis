@@ -11,6 +11,16 @@ import (
 
 var cmdLog = logger.NewModuleLogger("COMMANDS")
 
+// Flag 命令标志
+type Flag string
+
+const (
+	FlagWrite    Flag = "write"    // 修改数据
+	FlagReadonly Flag = "readonly" // 只读
+	FlagFast     Flag = "fast"     // O(1) / O(log N)，不阻塞
+	FlagAdmin    Flag = "admin"    // 管理类命令
+)
+
 // CommandContext 命令上下文
 type CommandContext struct {
 	Args        []string
@@ -30,11 +40,11 @@ var UnimplementedHandlerFunc HandlerFunc = func(ctx *CommandContext) string {
 // Command 命令定义，包含元数据和处理函数
 type Command struct {
 	Name     string
-	Arity    int    // 参数个数，负数表示最少参数（如 -2 表示至少 2 个）
-	Flags    string // write / readonly / fast / admin
-	FirstKey int    // 第一个 key 参数的位置（1-based，0 表示无 key）
-	LastKey  int    // 最后一个 key 参数的位置（负值表示到末尾，按 KeyStep 步进）
-	KeyStep  int    // key 参数的步长
+	Arity    int  // 参数个数，负数表示最少参数（如 -2 表示至少 2 个）
+	Flags    Flag // 命令标志
+	FirstKey int  // 第一个 key 参数的位置（1-based，0 表示无 key）
+	LastKey  int  // 最后一个 key 参数的位置（负值表示到末尾，按 KeyStep 步进）
+	KeyStep  int  // key 参数的步长
 	Handler  HandlerFunc
 }
 
@@ -42,12 +52,12 @@ type Command struct {
 //
 //	name     - 命令名称，如 "SET"、"GET"
 //	arity    - 参数个数（含命令名本身），负数表示最少参数，如 -2 表示至少 2 个
-//	flags    - 命令标志：write / readonly / fast / admin
+//	flags    - 命令标志：FlagWrite / FlagReadonly / FlagFast / FlagAdmin
 //	firstKey - 第一个 key 参数的位置（1-based），0 表示无 key 参数
 //	lastKey  - 最后一个 key 参数的位置，负值表示到参数末尾，按 keyStep 步进
 //	keyStep  - key 参数之间的步长
 //	handler  - 命令处理函数
-func Register(name string, arity int, flags string, firstKey, lastKey, keyStep int, handler HandlerFunc) {
+func Register(name string, arity int, flags Flag, firstKey, lastKey, keyStep int, handler HandlerFunc) {
 	CommandRegistry[strings.ToUpper(name)] = Command{
 		Name:     strings.ToUpper(name),
 		Arity:    arity,

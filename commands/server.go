@@ -10,11 +10,11 @@ import (
 
 func init() {
 	// 获取服务器信息和统计数据
-	Register("INFO", -1, "fast", 0, 0, 0, handleInfo)
+	Register("INFO", -1, FlagFast, 0, 0, 0, handleInfo)
 	// 手动触发 AOF 混合持久化重写
-	Register("BGREWRITEAOF", 1, "admin", 0, 0, 0, handleBGRewriteAOF)
+	Register("BGREWRITEAOF", 1, FlagAdmin, 0, 0, 0, handleBGRewriteAOF)
 	// 获取所有命令的详细信息，支持 COUNT/INFO/GETKEYS 子命令
-	Register("COMMAND", -1, "fast", 0, 0, 0, handleCommand)
+	Register("COMMAND", -1, FlagFast, 0, 0, 0, handleCommand)
 }
 
 func handleBGRewriteAOF(ctx *CommandContext) string {
@@ -135,7 +135,7 @@ func formatCommandInfo(cmd Command) string {
 		protocol.MakeBulkString(cmd.Name),
 		protocol.MakeInt(cmd.Arity),
 		protocol.MakeArray([]string{
-			protocol.MakeSimpleString(cmd.Flags),
+			protocol.MakeSimpleString(string(cmd.Flags)),
 		}),
 		protocol.MakeInt(cmd.FirstKey),
 		protocol.MakeInt(cmd.LastKey),

@@ -81,7 +81,7 @@ func (s *Server) handleClient(conn net.Conn) {
 		reply, cmd, ok := commands.Execute(cmdName, ctx)
 		if ok {
 			// 写类型命令且执行成功时持久化 AOF（非 db0 自动携带 SELECT）
-			if strings.Contains(cmd.Flags, "write") && strings.HasPrefix(reply, "+OK") {
+			if cmd.Flags == commands.FlagWrite && strings.HasPrefix(reply, "+OK") {
 				_ = s.aof.WriteCmd(args, currentDBID)
 			}
 		} else {
