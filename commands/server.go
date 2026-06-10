@@ -2,8 +2,10 @@ package commands
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
+	"godis/config"
 	"godis/protocol"
 	"godis/version"
 )
@@ -15,6 +17,8 @@ func init() {
 	Register("BGREWRITEAOF", 1, FlagAdmin, 0, 0, 0, handleBGRewriteAOF)
 	// 获取所有命令的详细信息，支持 COUNT/INFO/GETKEYS 子命令
 	Register("COMMAND", -1, FlagFast, 0, 0, 0, handleCommand)
+	// 配置相关命令，包含 GET/RESETSTAT/REWRITE/SET 子命令
+	Register("CONFIG", -1, FlagAdmin, 0, 0, 0, handleConfig)
 }
 
 func handleBGRewriteAOF(ctx *CommandContext) string {
@@ -42,7 +46,7 @@ func handleInfo(ctx *CommandContext) string {
 		sb.WriteString("# Server\r\n")
 		sb.WriteString(fmt.Sprintf("godis_version:%s\r\n", version.Version))
 		sb.WriteString("godis_mode:standalone\r\n")
-		sb.WriteString("tcp_port:6379\r\n")
+		sb.WriteString(fmt.Sprintf("tcp_port:%d\r\n", config.Global.Port))
 		sb.WriteString(fmt.Sprintf("build_time:%s\r\n", version.BuildTime))
 		sb.WriteString(fmt.Sprintf("git_commit:%s\r\n", version.GitCommit))
 	}
@@ -141,4 +145,104 @@ func formatCommandInfo(cmd Command) string {
 		protocol.MakeInt(cmd.LastKey),
 		protocol.MakeInt(cmd.KeyStep),
 	})
+}
+
+func handleConfig(ctx *CommandContext) string {
+	if len(ctx.Args) < 2 {
+		return protocol.MakeError("ERR wrong number of arguments for 'config' command")
+	}
+
+	sub := strings.ToUpper(ctx.Args[1])
+	switch sub {
+	case "GET":
+		return configGet(ctx.Args[2:])
+	case "SET":
+		return configSet(ctx.Args[2:])
+	case "RESETSTAT":
+		return protocol.MakeSimpleString("OK")
+	case "REWRITE":
+		return configRewrite()
+	default:
+		return protocol.MakeError(fmt.Sprintf("ERR unknown subcommand '%s'", ctx.Args[1]))
+	}
+}
+
+// configFields 定义配置字段名到值的映射（有序）
+func configFields() map[string]string {
+	cfg := config.Global
+	return map[string]string{
+		"bind":      cfg.Bind,
+		"port":      fmt.Sprintf("%d", cfg.Port),
+		"databases": fmt.Sprintf("%d", cfg.Databases),
+		"aof_file":  cfg.AofFile,
+		"log_file":  cfg.LogFile,
+		"log_level": cfg.LogLevel,
+	}
+}
+
+func configGet(args []string) string {
+	if len(args) < 1 {
+		return protocol.MakeError("ERR wrong number of arguments for 'config get' command")
+	}
+
+	pattern := args[0]
+	fields := configFields()
+
+	// 收集匹配的 key，保持输出有序
+	var keys []string
+	for k := range fields {
+		if matchConfigPattern(pattern, k) {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+
+	elements := make([]string, 0, len(keys)*2)
+	for _, k := range keys {
+		elements = append(elements, protocol.MakeBulkString(k), protocol.MakeBulkString(fields[k]))
+	}
+	return protocol.MakeArray(elements)
+}
+
+func matchConfigPattern(pattern, name string) bool {
+	if pattern == "*" {
+		return true
+	}
+	// 简单的前缀/后缀通配符匹配
+	if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") {
+		return strings.Contains(name, pattern[1:len(pattern)-1])
+	}
+	if strings.HasPrefix(pattern, "*") {
+		return strings.HasSuffix(name, pattern[1:])
+	}
+	if strings.HasSuffix(pattern, "*") {
+		return strings.HasPrefix(name, pattern[:len(pattern)-1])
+	}
+	return name == pattern
+}
+
+// configSet 配置设置，目前仅支持log_level
+func configSet(args []string) string {
+	if len(args) < 2 {
+		return protocol.MakeError("ERR wrong number of arguments for 'config set' command")
+	}
+
+	key := strings.ToLower(args[0])
+	value := args[1]
+
+	switch key {
+	case "log_level":
+		config.Global.LogLevel = value
+	default:
+		return protocol.MakeError(fmt.Sprintf("ERR CONFIG SET '%s' is not supported", key))
+	}
+
+	return protocol.MakeSimpleString("OK")
+}
+
+func configRewrite() string {
+	if err := config.Save(); err != nil {
+		return protocol.MakeError(fmt.Sprintf("ERR rewrite failed: %v", err))
+	}
+	return protocol.MakeSimpleString("OK")
 }

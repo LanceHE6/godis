@@ -18,6 +18,7 @@ type Config struct {
 }
 
 var Global Config
+var configPath string
 
 func defaults() Config {
 	return Config{
@@ -32,6 +33,7 @@ func defaults() Config {
 
 // Init 加载配置文件，不存在则自动生成默认配置
 func Init(filename string) error {
+	configPath = filename
 	Global = defaults()
 
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
@@ -42,6 +44,24 @@ func Init(filename string) error {
 	}
 
 	return load(filename)
+}
+
+// Save 将当前配置写回配置文件
+func Save() error {
+	file, err := os.Create(configPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	header := "# Godis configuration file\n\n"
+	if _, err := file.WriteString(header); err != nil {
+		return err
+	}
+
+	encoder := yaml.NewEncoder(file)
+	encoder.SetIndent(2)
+	return encoder.Encode(Global)
 }
 
 // generate 生成默认配置文件
