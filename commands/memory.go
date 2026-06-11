@@ -18,7 +18,7 @@ func init() {
 
 func handleMemory(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'memory' command")
+		return protocol.WrongArgsErr("memory")
 	}
 	sub := strings.ToUpper(ctx.Args[1])
 	switch sub {
@@ -26,7 +26,7 @@ func handleMemory(ctx *CommandContext) string {
 		return memoryStats(ctx.AllDBs)
 	case "USAGE":
 		if len(ctx.Args) < 3 {
-			return protocol.MakeError("ERR wrong number of arguments for 'memory usage' command")
+			return protocol.WrongArgsErr("memory usage")
 		}
 		return memoryUsage(ctx.DB, ctx.Args[2])
 	default:

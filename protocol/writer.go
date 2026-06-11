@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"fmt"
 	"strconv"
 )
 
@@ -12,6 +13,11 @@ func MakeSimpleString(s string) string {
 // MakeError 构造错误回复 (如: -ERR message\r\n)
 func MakeError(err string) string {
 	return "-" + err + "\r\n"
+}
+
+// WrongArgsErr 参数数量错误的快捷方法
+func WrongArgsErr(cmd string) string {
+	return MakeError(fmt.Sprintf("ERR wrong number of arguments for '%s' command", cmd))
 }
 
 // MakeInt 构造整数回复 (如: :100\r\n)

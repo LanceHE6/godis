@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -40,11 +41,13 @@ func init() {
 	Register("FLUSHDB", 1, FlagWrite, 0, 0, 0, handleFlushDB)
 	// 清空所有数据库的所有 key
 	Register("FLUSHALL", 1, FlagWrite, 0, 0, 0, handleFlushAll)
+	// 增量迭代当前数据库中的 key
+	Register("SCAN", -2, FlagReadonly, 0, 0, 0, handleScan)
 }
 
 func handleDel(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'del' command")
+		return protocol.WrongArgsErr("del")
 	}
 	keys := ctx.Args[1:]
 	deleted := ctx.DB.Del(keys...)
@@ -53,7 +56,7 @@ func handleDel(ctx *CommandContext) string {
 
 func handleExists(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'exists' command")
+		return protocol.WrongArgsErr("exists")
 	}
 	keys := ctx.Args[1:]
 	count := ctx.DB.Exists(keys...)
@@ -62,7 +65,7 @@ func handleExists(ctx *CommandContext) string {
 
 func handleExpire(ctx *CommandContext) string {
 	if len(ctx.Args) < 3 {
-		return protocol.MakeError("ERR wrong number of arguments for 'expire' command")
+		return protocol.WrongArgsErr("expire")
 	}
 	key := ctx.Args[1]
 	seconds, err := strconv.Atoi(ctx.Args[2])
@@ -77,7 +80,7 @@ func handleExpire(ctx *CommandContext) string {
 
 func handleMove(ctx *CommandContext) string {
 	if len(ctx.Args) < 3 {
-		return protocol.MakeError("ERR wrong number of arguments for 'move' command")
+		return protocol.WrongArgsErr("move")
 	}
 	key := ctx.Args[1]
 	dbIdx, err := strconv.Atoi(ctx.Args[2])
@@ -95,7 +98,7 @@ func handleMove(ctx *CommandContext) string {
 
 func handlePersist(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'persist' command")
+		return protocol.WrongArgsErr("persist")
 	}
 	key := ctx.Args[1]
 	if ctx.DB.Persist(key) {
@@ -106,7 +109,7 @@ func handlePersist(ctx *CommandContext) string {
 
 func handlePExpire(ctx *CommandContext) string {
 	if len(ctx.Args) < 3 {
-		return protocol.MakeError("ERR wrong number of arguments for 'pexpire' command")
+		return protocol.WrongArgsErr("pexpire")
 	}
 	key := ctx.Args[1]
 	ms, err := strconv.ParseInt(ctx.Args[2], 10, 64)
@@ -121,7 +124,7 @@ func handlePExpire(ctx *CommandContext) string {
 
 func handlePTTL(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'pttl' command")
+		return protocol.WrongArgsErr("pttl")
 	}
 	key := ctx.Args[1]
 	return protocol.MakeInt(int(ctx.DB.PTTL(key)))
@@ -129,7 +132,7 @@ func handlePTTL(ctx *CommandContext) string {
 
 func handleTTL(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'ttl' command")
+		return protocol.WrongArgsErr("ttl")
 	}
 	key := ctx.Args[1]
 	return protocol.MakeInt(ctx.DB.TTL(key))
@@ -137,7 +140,7 @@ func handleTTL(ctx *CommandContext) string {
 
 func handleType(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'type' command")
+		return protocol.WrongArgsErr("type")
 	}
 	key := ctx.Args[1]
 	dt := ctx.DB.TypeOf(key)
@@ -159,7 +162,7 @@ func handleType(ctx *CommandContext) string {
 
 func handleTouch(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'touch' command")
+		return protocol.WrongArgsErr("touch")
 	}
 	keys := ctx.Args[1:]
 	count := ctx.DB.Touch(keys...)
@@ -168,7 +171,7 @@ func handleTouch(ctx *CommandContext) string {
 
 func handleSort(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'sort' command")
+		return protocol.WrongArgsErr("sort")
 	}
 	key := ctx.Args[1]
 
@@ -319,4 +322,119 @@ func handleFlushAll(ctx *CommandContext) string {
 		db.Flush()
 	}
 	return protocol.MakeSimpleString("OK")
+}
+
+func handleScan(ctx *CommandContext) string {
+	cursor, err := strconv.ParseUint(ctx.Args[1], 10, 64)
+	if err != nil {
+		return protocol.MakeError("ERR invalid cursor")
+	}
+
+	count := 10
+	var matchPattern string
+	var typeFilter string
+
+	args := ctx.Args[2:]
+	for i := 0; i < len(args); i++ {
+		switch strings.ToUpper(args[i]) {
+		case "COUNT":
+			if i+1 < len(args) {
+				c, err := strconv.Atoi(args[i+1])
+				if err == nil && c > 0 {
+					count = c
+				}
+				i++
+			}
+		case "MATCH":
+			if i+1 < len(args) {
+				matchPattern = args[i+1]
+				i++
+			}
+		case "TYPE":
+			if i+1 < len(args) {
+				typeFilter = strings.ToLower(args[i+1])
+				i++
+			}
+		}
+	}
+
+	keys := ctx.DB.Keys()
+	sort.Strings(keys)
+
+	if cursor >= uint64(len(keys)) {
+		return protocol.MakeArray([]string{
+			protocol.MakeBulkString("0"),
+			protocol.MakeArray([]string{}),
+		})
+	}
+
+	end := cursor + uint64(count)
+	if end > uint64(len(keys)) {
+		end = uint64(len(keys))
+	}
+
+	result := []string{}
+	for _, key := range keys[cursor:end] {
+		if matchPattern != "" && !matchGlob(key, matchPattern) {
+			continue
+		}
+		if typeFilter != "" {
+			dt := ctx.DB.TypeOf(key)
+			typeName := ""
+			switch dt {
+			case types.TypeString:
+				typeName = "string"
+			case types.TypeHash:
+				typeName = "hash"
+			case types.TypeList:
+				typeName = "list"
+			case types.TypeSet:
+				typeName = "set"
+			case types.TypeZSet:
+				typeName = "zset"
+			}
+			if typeName != typeFilter {
+				continue
+			}
+		}
+		result = append(result, protocol.MakeBulkString(key))
+	}
+
+	nextCursor := "0"
+	if end < uint64(len(keys)) {
+		nextCursor = fmt.Sprintf("%d", end)
+	}
+
+	return protocol.MakeArray([]string{
+		protocol.MakeBulkString(nextCursor),
+		protocol.MakeArray(result),
+	})
+}
+
+// matchGlob 简单 glob 模式匹配，支持 * 和 ?
+func matchGlob(s, pattern string) bool {
+	si, pi := 0, 0
+	starPi, starSi := -1, -1
+
+	for si < len(s) {
+		if pi < len(pattern) && (pattern[pi] == '?' || pattern[pi] == s[si]) {
+			si++
+			pi++
+		} else if pi < len(pattern) && pattern[pi] == '*' {
+			starPi = pi
+			starSi = si
+			pi++
+		} else if starPi != -1 {
+			pi = starPi + 1
+			starSi++
+			si = starSi
+		} else {
+			return false
+		}
+	}
+
+	for pi < len(pattern) && pattern[pi] == '*' {
+		pi++
+	}
+	return pi == len(pattern)
 }

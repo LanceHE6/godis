@@ -14,7 +14,7 @@ func init() {
 
 func handleSelect(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'select' command")
+		return protocol.WrongArgsErr("select")
 	}
 
 	// 解析输入的库序号

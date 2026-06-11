@@ -17,7 +17,7 @@ func init() {
 func handleSet(ctx *CommandContext) string {
 	args := ctx.Args
 	if len(args) < 3 {
-		return protocol.MakeError("ERR wrong number of arguments for 'set' command")
+		return protocol.WrongArgsErr("set")
 	}
 
 	key := args[1]
@@ -38,7 +38,7 @@ func handleSet(ctx *CommandContext) string {
 func handleGet(ctx *CommandContext) string {
 	args := ctx.Args
 	if len(args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'get' command")
+		return protocol.WrongArgsErr("get")
 	}
 
 	key := args[1]

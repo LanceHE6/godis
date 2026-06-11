@@ -109,7 +109,7 @@ func commandInfo(names []string) string {
 
 func commandGetKeys(args []string) string {
 	if len(args) < 1 {
-		return protocol.MakeError("ERR wrong number of arguments for 'command getkeys' command")
+		return protocol.WrongArgsErr("command getkeys")
 	}
 
 	cmd, ok := CommandRegistry[strings.ToUpper(args[0])]
@@ -149,7 +149,7 @@ func formatCommandInfo(cmd Command) string {
 
 func handleConfig(ctx *CommandContext) string {
 	if len(ctx.Args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'config' command")
+		return protocol.WrongArgsErr("config")
 	}
 
 	sub := strings.ToUpper(ctx.Args[1])
@@ -182,7 +182,7 @@ func configFields() map[string]string {
 
 func configGet(args []string) string {
 	if len(args) < 1 {
-		return protocol.MakeError("ERR wrong number of arguments for 'config get' command")
+		return protocol.WrongArgsErr("config get")
 	}
 
 	pattern := args[0]
@@ -224,7 +224,7 @@ func matchConfigPattern(pattern, name string) bool {
 // configSet 配置设置，目前仅支持log_level
 func configSet(args []string) string {
 	if len(args) < 2 {
-		return protocol.MakeError("ERR wrong number of arguments for 'config set' command")
+		return protocol.WrongArgsErr("config set")
 	}
 
 	key := strings.ToLower(args[0])
