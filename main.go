@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"godis/commands"
 	"godis/config"
@@ -21,11 +22,14 @@ const banner = `
 `
 
 func main() {
+	configPath := flag.String("config", "./etc/godis.yaml", "config file path")
+	flag.Parse()
+
 	fmt.Print(banner)
 	fmt.Printf("  Version: %s  Build: %s  Commit: %s\n\n", version.Version, version.BuildTime, version.GitCommit)
 
 	// 加载配置（不存在则自动生成 godis.conf）
-	if err := config.Init("./etc/godis.yaml"); err != nil {
+	if err := config.Init(*configPath); err != nil {
 		panic(fmt.Sprintf("failed to load config: %v", err))
 	}
 	cfg := config.Global
