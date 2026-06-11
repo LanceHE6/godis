@@ -156,6 +156,162 @@ func (db *GodisDB) Keys() []string {
 	return keys
 }
 
+// Flush 清空当前数据库的所有 key
+func (db *GodisDB) Flush() {
+	db.mu.Lock()
+	db.data = make(map[string]Item)
+	db.mu.Unlock()
+}
+
+// Exists 返回存在的 key 数量
+func (db *GodisDB) Exists(keys ...string) int {
+	db.mu.RLock()
+	count := 0
+	now := time.Now()
+	for _, key := range keys {
+		if item, ok := db.data[key]; ok {
+			if item.IsNeverDie || now.Before(item.ExpiresAt) {
+				count++
+			}
+		}
+	}
+	db.mu.RUnlock()
+	return count
+}
+
+// Expire 设置 key 的过期时间（秒）
+func (db *GodisDB) Expire(key string, seconds int) bool {
+	db.mu.Lock()
+	item, exists := db.data[key]
+	if !exists || (!item.IsNeverDie && time.Now().After(item.ExpiresAt)) {
+		db.mu.Unlock()
+		return false
+	}
+	item.IsNeverDie = false
+	item.ExpiresAt = time.Now().Add(time.Duration(seconds) * time.Second)
+	db.data[key] = item
+	db.mu.Unlock()
+	return true
+}
+
+// PExpire 设置 key 的过期时间（毫秒）
+func (db *GodisDB) PExpire(key string, milliseconds int64) bool {
+	db.mu.Lock()
+	item, exists := db.data[key]
+	if !exists || (!item.IsNeverDie && time.Now().After(item.ExpiresAt)) {
+		db.mu.Unlock()
+		return false
+	}
+	item.IsNeverDie = false
+	item.ExpiresAt = time.Now().Add(time.Duration(milliseconds) * time.Millisecond)
+	db.data[key] = item
+	db.mu.Unlock()
+	return true
+}
+
+// Persist 移除 key 的过期时间，使其永久有效
+func (db *GodisDB) Persist(key string) bool {
+	db.mu.Lock()
+	item, exists := db.data[key]
+	if !exists || item.IsNeverDie {
+		db.mu.Unlock()
+		return false
+	}
+	if !item.IsNeverDie && time.Now().After(item.ExpiresAt) {
+		delete(db.data, key)
+		db.mu.Unlock()
+		return false
+	}
+	item.IsNeverDie = true
+	item.ExpiresAt = time.Time{}
+	db.data[key] = item
+	db.mu.Unlock()
+	return true
+}
+
+// TTL 返回 key 的剩余生存时间（秒），-1 表示永久，-2 表示不存在
+func (db *GodisDB) TTL(key string) int {
+	db.mu.RLock()
+	item, exists := db.data[key]
+	db.mu.RUnlock()
+
+	if !exists {
+		return -2
+	}
+	if item.IsNeverDie {
+		return -1
+	}
+	if time.Now().After(item.ExpiresAt) {
+		db.mu.Lock()
+		delete(db.data, key)
+		db.mu.Unlock()
+		return -2
+	}
+	return int(time.Until(item.ExpiresAt).Seconds())
+}
+
+// PTTL 返回 key 的剩余生存时间（毫秒），-1 表示永久，-2 表示不存在
+func (db *GodisDB) PTTL(key string) int64 {
+	db.mu.RLock()
+	item, exists := db.data[key]
+	db.mu.RUnlock()
+
+	if !exists {
+		return -2
+	}
+	if item.IsNeverDie {
+		return -1
+	}
+	if time.Now().After(item.ExpiresAt) {
+		db.mu.Lock()
+		delete(db.data, key)
+		db.mu.Unlock()
+		return -2
+	}
+	return time.Until(item.ExpiresAt).Milliseconds()
+}
+
+// Move 将 key 移动到目标数据库，成功返回 true
+func (db *GodisDB) Move(key string, target *GodisDB) bool {
+	db.mu.Lock()
+	item, exists := db.data[key]
+	if !exists || (!item.IsNeverDie && time.Now().After(item.ExpiresAt)) {
+		db.mu.Unlock()
+		return false
+	}
+	delete(db.data, key)
+	db.mu.Unlock()
+
+	target.mu.Lock()
+	if _, exists := target.data[key]; exists {
+		target.mu.Unlock()
+		// 目标已存在，回滚
+		db.mu.Lock()
+		db.data[key] = item
+		db.mu.Unlock()
+		return false
+	}
+	target.data[key] = item
+	target.mu.Unlock()
+	return true
+}
+
+// Touch 更新 key 的最后访问时间，返回存在的 key 数量
+func (db *GodisDB) Touch(keys ...string) int {
+	db.mu.RLock()
+	count := 0
+	now := time.Now()
+	for _, key := range keys {
+		if item, ok := db.data[key]; ok {
+			if item.IsNeverDie || now.Before(item.ExpiresAt) {
+				count++
+			}
+		}
+	}
+	db.mu.RUnlock()
+	return count
+}
+
 // StartGcWorker 全局 GC，负责在后台定期清理所有数据库中过期的 Key
 func StartGcWorker(dbs []*GodisDB) {
 	ticker := time.NewTicker(1 * time.Second)

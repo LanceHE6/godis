@@ -130,3 +130,27 @@ func TestFlagConstants(t *testing.T) {
 		t.Errorf("FlagAdmin = %q, want admin", FlagAdmin)
 	}
 }
+
+func TestDBSize(t *testing.T) {
+	db := datastore.NewGodisDB()
+	db.Set("a", "1", 0)
+	db.Set("b", "2", 0)
+	db.Set("c", "3", 0)
+
+	id := 0
+	ctx := &CommandContext{
+		Args:        []string{"DBSIZE"},
+		DB:          db,
+		AllDBs:      []*datastore.GodisDB{db},
+		CurrentDBID: &id,
+	}
+
+	reply, _, ok := Execute("DBSIZE", ctx)
+	if !ok {
+		t.Fatal("DBSIZE not registered")
+	}
+	expected := protocol.MakeInt(3)
+	if reply != expected {
+		t.Errorf("DBSIZE reply = %q, want %q", reply, expected)
+	}
+}
