@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,6 +19,7 @@ const testPort = 16379
 
 var rdb *redis.Client
 var cmd *exec.Cmd
+var passed, failed int32
 
 func TestMain(m *testing.M) {
 	fmt.Println("[SETUP] building godis binary...")
@@ -71,6 +74,17 @@ log_level: error
 
 	code := m.Run()
 
+	fmt.Println()
+	fmt.Println(strings.Repeat("=", 50))
+	fmt.Printf("  Test Results\n")
+	fmt.Printf("  Total: %d | Passed: %d | Failed: %d\n", passed+failed, passed, failed)
+	if failed > 0 {
+		fmt.Printf("  Status: ❌ SOME TESTS FAILED\n")
+	} else {
+		fmt.Printf("  Status: ✅ ALL PASSED\n")
+	}
+	fmt.Println(strings.Repeat("=", 50))
+
 	fmt.Println("[TEARDOWN] cleaning up...")
 	rdb.Do(context.Background(), "FLUSHALL")
 	rdb.Close()
@@ -98,5 +112,12 @@ func waitForPort(addr string, timeout time.Duration) error {
 
 func cleanDB(t *testing.T) {
 	t.Helper()
+	t.Cleanup(func() {
+		if t.Failed() {
+			atomic.AddInt32(&failed, 1)
+		} else {
+			atomic.AddInt32(&passed, 1)
+		}
+	})
 	rdb.Do(context.Background(), "FLUSHALL")
 }
