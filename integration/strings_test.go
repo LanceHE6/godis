@@ -81,3 +81,47 @@ func TestGet_NonExistent(t *testing.T) {
 	}
 	t.Logf("GET nokey returned error (expected): %v", err)
 }
+
+func TestAppend_Create(t *testing.T) {
+	cleanDB(t)
+	ctx := context.Background()
+
+	t.Log("APPEND mykey world (key does not exist)")
+	n, err := rdb.Append(ctx, "mykey", "world").Result()
+	if err != nil {
+		t.Fatalf("APPEND failed: %v", err)
+	}
+	t.Logf("APPEND returned length %d", n)
+	if n != 5 {
+		t.Errorf("APPEND = %d, want 5", n)
+	}
+
+	val, _ := rdb.Get(ctx, "mykey").Result()
+	t.Logf("GET mykey = %q", val)
+	if val != "world" {
+		t.Errorf("GET mykey = %q, want world", val)
+	}
+}
+
+func TestAppend_Existing(t *testing.T) {
+	cleanDB(t)
+	ctx := context.Background()
+
+	rdb.Set(ctx, "greeting", "hello", 0)
+	t.Log("SET greeting hello, then APPEND greeting ' world'")
+
+	n, err := rdb.Append(ctx, "greeting", " world").Result()
+	if err != nil {
+		t.Fatalf("APPEND failed: %v", err)
+	}
+	t.Logf("APPEND returned length %d", n)
+	if n != 11 {
+		t.Errorf("APPEND = %d, want 11", n)
+	}
+
+	val, _ := rdb.Get(ctx, "greeting").Result()
+	t.Logf("GET greeting = %q", val)
+	if val != "hello world" {
+		t.Errorf("GET greeting = %q, want 'hello world'", val)
+	}
+}

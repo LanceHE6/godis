@@ -12,6 +12,8 @@ func init() {
 	Register("SET", -3, FlagWrite, 1, 1, 1, handleSet)
 	// 获取 key 对应的值
 	Register("GET", 2, FlagReadonly, 1, 1, 1, handleGet)
+	// 在字符串值末尾追加内容，若 key 不存在则创建
+	Register("APPEND", 3, FlagWrite, 1, 1, 1, handleAppend)
 }
 
 func handleSet(ctx *CommandContext) string {
@@ -47,4 +49,16 @@ func handleGet(ctx *CommandContext) string {
 		return protocol.MakeNull()
 	}
 	return protocol.MakeBulkString(val)
+}
+
+func handleAppend(ctx *CommandContext) string {
+	if len(ctx.Args) < 3 {
+		return protocol.WrongArgsErr("append")
+	}
+	key, suffix := ctx.Args[1], ctx.Args[2]
+	newLen, err := ctx.DB.Append(key, suffix)
+	if err != nil {
+		return protocol.MakeError("ERR " + err.Error())
+	}
+	return protocol.MakeInt(newLen)
 }

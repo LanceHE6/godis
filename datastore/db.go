@@ -1,6 +1,8 @@
 package datastore
 
 import (
+	"fmt"
+
 	"godis/logger"
 	"godis/types"
 	"sync"
@@ -71,6 +73,42 @@ func (db *GodisDB) Get(key string) (string, bool) {
 		return "", false
 	}
 	return sv.Value, true
+}
+
+// Append 在字符串值末尾追加内容，key 不存在时创建，返回新长度
+func (db *GodisDB) Append(key, suffix string) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	now := time.Now()
+	item, exists := db.data[key]
+
+	if exists {
+		// 惰性删除
+		if !item.IsNeverDie && now.After(item.ExpiresAt) {
+			delete(db.data, key)
+			exists = false
+		}
+	}
+
+	if exists {
+		sv, ok := item.Value.(*types.StringValue)
+		if !ok {
+			return 0, fmt.Errorf("WRONGTYPE Operation against a key holding the wrong kind of value")
+		}
+		sv.Value += suffix
+		item.Value = sv
+		db.data[key] = item
+		return len(sv.Value), nil
+	}
+
+	// key 不存在，创建
+	db.data[key] = Item{
+		Type:       types.TypeString,
+		Value:      types.NewStringValue(suffix),
+		IsNeverDie: true,
+	}
+	return len(suffix), nil
 }
 
 // GetItem 获取原始 Item（供命令层判断类型）
