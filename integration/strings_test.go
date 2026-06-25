@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func TestSetGet(t *testing.T) {
@@ -123,5 +125,66 @@ func TestAppend_Existing(t *testing.T) {
 	t.Logf("GET greeting = %q", val)
 	if val != "hello world" {
 		t.Errorf("GET greeting = %q, want 'hello world'", val)
+	}
+}
+
+func TestBitCount_All(t *testing.T) {
+	cleanDB(t)
+	ctx := context.Background()
+
+	// "a" = 0b01100001 = 3 个 1
+	rdb.Set(ctx, "k", "a", 0)
+	t.Log("SET k 'a' (01100001, 3 bits set)")
+
+	n, err := rdb.BitCount(ctx, "k", nil).Result()
+	if err != nil {
+		t.Fatalf("BITCOUNT failed: %v", err)
+	}
+	t.Logf("BITCOUNT k = %d", n)
+	if n != 3 {
+		t.Errorf("BITCOUNT k = %d, want 3", n)
+	}
+}
+
+func TestBitCount_Range(t *testing.T) {
+	cleanDB(t)
+	ctx := context.Background()
+
+	// "ab" = [0x61, 0x62] — 'a' 有 3 个 1, 'b' 有 3 个 1
+	rdb.Set(ctx, "k", "ab", 0)
+	t.Log("SET k 'ab', then BITCOUNT k 0 0 (only first byte)")
+
+	n, err := rdb.BitCount(ctx, "k", &redis.BitCount{Start: 0, End: 0}).Result()
+	if err != nil {
+		t.Fatalf("BITCOUNT range failed: %v", err)
+	}
+	t.Logf("BITCOUNT k 0 0 = %d (expect 3, only 'a')", n)
+	if n != 3 {
+		t.Errorf("BITCOUNT k 0 0 = %d, want 3", n)
+	}
+
+	// 整个字符串
+	n, err = rdb.BitCount(ctx, "k", &redis.BitCount{Start: 0, End: 1}).Result()
+	if err != nil {
+		t.Fatalf("BITCOUNT all failed: %v", err)
+	}
+	t.Logf("BITCOUNT k 0 1 = %d (expect 6, 'a' + 'b')", n)
+	if n != 6 {
+		t.Errorf("BITCOUNT k 0 1 = %d, want 6", n)
+	}
+}
+
+func TestBitCount_NonExistent(t *testing.T) {
+	cleanDB(t)
+	ctx := context.Background()
+
+	t.Log("BITCOUNT nokey (non-existent)")
+	n, err := rdb.BitCount(ctx, "nokey", nil).Result()
+	if err != nil {
+		t.Fatalf("BITCOUNT nokey failed: %v", err)
+	}
+	t.Logf("BITCOUNT nokey = %d (expect 0)", n)
+	if n != 0 {
+		t.Errorf("BITCOUNT nokey = %d, want 0", n)
 	}
 }
