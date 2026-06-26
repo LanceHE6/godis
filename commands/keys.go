@@ -46,27 +46,18 @@ func init() {
 }
 
 func handleDel(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("del")
-	}
 	keys := ctx.Args[1:]
 	deleted := ctx.DB.Del(keys...)
 	return protocol.MakeInt(deleted)
 }
 
 func handleExists(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("exists")
-	}
 	keys := ctx.Args[1:]
 	count := ctx.DB.Exists(keys...)
 	return protocol.MakeInt(count)
 }
 
 func handleExpire(ctx *CommandContext) string {
-	if len(ctx.Args) < 3 {
-		return protocol.WrongArgsErr("expire")
-	}
 	key := ctx.Args[1]
 	seconds, err := strconv.Atoi(ctx.Args[2])
 	if err != nil || seconds <= 0 {
@@ -79,9 +70,6 @@ func handleExpire(ctx *CommandContext) string {
 }
 
 func handleMove(ctx *CommandContext) string {
-	if len(ctx.Args) < 3 {
-		return protocol.WrongArgsErr("move")
-	}
 	key := ctx.Args[1]
 	dbIdx, err := strconv.Atoi(ctx.Args[2])
 	if err != nil || dbIdx < 0 || dbIdx >= len(ctx.AllDBs) {
@@ -97,9 +85,6 @@ func handleMove(ctx *CommandContext) string {
 }
 
 func handlePersist(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("persist")
-	}
 	key := ctx.Args[1]
 	if ctx.DB.Persist(key) {
 		return protocol.MakeInt(1)
@@ -108,9 +93,6 @@ func handlePersist(ctx *CommandContext) string {
 }
 
 func handlePExpire(ctx *CommandContext) string {
-	if len(ctx.Args) < 3 {
-		return protocol.WrongArgsErr("pexpire")
-	}
 	key := ctx.Args[1]
 	ms, err := strconv.ParseInt(ctx.Args[2], 10, 64)
 	if err != nil || ms <= 0 {
@@ -123,25 +105,16 @@ func handlePExpire(ctx *CommandContext) string {
 }
 
 func handlePTTL(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("pttl")
-	}
 	key := ctx.Args[1]
 	return protocol.MakeInt(int(ctx.DB.PTTL(key)))
 }
 
 func handleTTL(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("ttl")
-	}
 	key := ctx.Args[1]
 	return protocol.MakeInt(ctx.DB.TTL(key))
 }
 
 func handleType(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("type")
-	}
 	key := ctx.Args[1]
 	dt := ctx.DB.TypeOf(key)
 	switch dt {
@@ -161,18 +134,12 @@ func handleType(ctx *CommandContext) string {
 }
 
 func handleTouch(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("touch")
-	}
 	keys := ctx.Args[1:]
 	count := ctx.DB.Touch(keys...)
 	return protocol.MakeInt(count)
 }
 
 func handleSort(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("sort")
-	}
 	key := ctx.Args[1]
 
 	// 解析可选参数

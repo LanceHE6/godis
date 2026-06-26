@@ -16,14 +16,22 @@ func init() {
 	Register("APPEND", 3, FlagWrite, 1, 1, 1, handleAppend)
 	// 统计字符串值中比特位为1的数量
 	Register("BITCOUNT", -2, FlagReadonly, 1, 1, 1, handleBitCount)
+	// 将 key 的整数值减 1
+	Register("DECR", 2, FlagWrite, 1, 1, 1, handleDecr)
+	// 将 key 的整数值减指定值
+	Register("DECRBY", 3, FlagWrite, 1, 1, 1, handleDecrBy)
+	// 将 key 的整数值加 1
+	Register("INCR", 2, FlagWrite, 1, 1, 1, handleIncr)
+	// 将 key 的整数值加指定值
+	Register("INCRBY", 3, FlagWrite, 1, 1, 1, handleIncrBy)
+	// 返回字符串值的子串
+	Register("GETRANGE", 4, FlagReadonly, 1, 1, 1, handleGetRange)
+	// 设置新值并返回旧值
+	Register("GETSET", 3, FlagWrite, 1, 1, 1, handleGetSet)
 }
 
 func handleSet(ctx *CommandContext) string {
 	args := ctx.Args
-	if len(args) < 3 {
-		return protocol.WrongArgsErr("set")
-	}
-
 	key := args[1]
 	val := args[2]
 	ttl := 0
@@ -40,12 +48,7 @@ func handleSet(ctx *CommandContext) string {
 }
 
 func handleGet(ctx *CommandContext) string {
-	args := ctx.Args
-	if len(args) < 2 {
-		return protocol.WrongArgsErr("get")
-	}
-
-	key := args[1]
+	key := ctx.Args[1]
 	val, exists := ctx.DB.Get(key)
 	if !exists {
 		return protocol.MakeNull()
@@ -54,9 +57,6 @@ func handleGet(ctx *CommandContext) string {
 }
 
 func handleAppend(ctx *CommandContext) string {
-	if len(ctx.Args) < 3 {
-		return protocol.WrongArgsErr("append")
-	}
 	key, suffix := ctx.Args[1], ctx.Args[2]
 	newLen, err := ctx.DB.Append(key, suffix)
 	if err != nil {
@@ -65,30 +65,7 @@ func handleAppend(ctx *CommandContext) string {
 	return protocol.MakeInt(newLen)
 }
 
-// popcountTable 预计算的 256 个值的 popcount
-var popcountTable = [256]int{
-	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
-	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-	3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-	3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-	3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-	3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-	4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8,
-}
-
 func handleBitCount(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("bitcount")
-	}
 	key := ctx.Args[1]
 
 	val, exists := ctx.DB.Get(key)
@@ -138,4 +115,97 @@ func handleBitCount(ctx *CommandContext) string {
 		count += popcountTable[bytes[i]]
 	}
 	return protocol.MakeInt(count)
+}
+
+func handleIncrBy(ctx *CommandContext) string {
+	key := ctx.Args[1]
+	delta, err := strconv.ParseInt(ctx.Args[2], 10, 64)
+	if err != nil {
+		return protocol.MakeError("ERR value is not an integer or out of range")
+	}
+	n, err := ctx.DB.IncrBy(key, delta)
+	if err != nil {
+		return protocol.MakeError("ERR " + err.Error())
+	}
+	return protocol.MakeInt(int(n))
+}
+
+func handleIncr(ctx *CommandContext) string {
+	n, err := ctx.DB.IncrBy(ctx.Args[1], 1)
+	if err != nil {
+		return protocol.MakeError("ERR " + err.Error())
+	}
+	return protocol.MakeInt(int(n))
+}
+
+func handleDecrBy(ctx *CommandContext) string {
+	key := ctx.Args[1]
+	delta, err := strconv.ParseInt(ctx.Args[2], 10, 64)
+	if err != nil {
+		return protocol.MakeError("ERR value is not an integer or out of range")
+	}
+	n, err := ctx.DB.IncrBy(key, -delta)
+	if err != nil {
+		return protocol.MakeError("ERR " + err.Error())
+	}
+	return protocol.MakeInt(int(n))
+}
+
+func handleDecr(ctx *CommandContext) string {
+	n, err := ctx.DB.IncrBy(ctx.Args[1], -1)
+	if err != nil {
+		return protocol.MakeError("ERR " + err.Error())
+	}
+	return protocol.MakeInt(int(n))
+}
+
+func handleGetRange(ctx *CommandContext) string {
+	key := ctx.Args[1]
+	val, exists := ctx.DB.Get(key)
+	if !exists {
+		return protocol.MakeBulkString("")
+	}
+
+	start, err := strconv.Atoi(ctx.Args[2])
+	if err != nil {
+		return protocol.MakeError("ERR value is not an integer or out of range")
+	}
+	end, err := strconv.Atoi(ctx.Args[3])
+	if err != nil {
+		return protocol.MakeError("ERR value is not an integer or out of range")
+	}
+
+	bytes := []byte(val)
+	n := len(bytes)
+
+	// 处理负索引
+	if start < 0 {
+		start = n + start
+	}
+	if end < 0 {
+		end = n + end
+	}
+
+	// 范围裁剪
+	if start < 0 {
+		start = 0
+	}
+	if end >= n {
+		end = n - 1
+	}
+
+	if start > end || start >= n {
+		return protocol.MakeBulkString("")
+	}
+
+	return protocol.MakeBulkString(string(bytes[start : end+1]))
+}
+
+func handleGetSet(ctx *CommandContext) string {
+	key, newVal := ctx.Args[1], ctx.Args[2]
+	oldVal, exists := ctx.DB.GetSet(key, newVal)
+	if !exists {
+		return protocol.MakeNull()
+	}
+	return protocol.MakeBulkString(oldVal)
 }

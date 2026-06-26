@@ -13,11 +13,6 @@ func init() {
 }
 
 func handleSelect(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("select")
-	}
-
-	// 解析输入的库序号
 	dbIdx, err := strconv.Atoi(ctx.Args[1])
 	if err != nil || dbIdx < 0 || dbIdx >= len(ctx.AllDBs) {
 		return protocol.MakeError(fmt.Sprintf("ERR DB index is out of range (0-%d)", len(ctx.AllDBs)-1))

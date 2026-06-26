@@ -17,9 +17,6 @@ func init() {
 }
 
 func handleMemory(ctx *CommandContext) string {
-	if len(ctx.Args) < 2 {
-		return protocol.WrongArgsErr("memory")
-	}
 	sub := strings.ToUpper(ctx.Args[1])
 	switch sub {
 	case "STATS":

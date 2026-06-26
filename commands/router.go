@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"strings"
 
 	"godis/datastore"
@@ -31,11 +30,6 @@ type CommandContext struct {
 }
 
 type HandlerFunc func(ctx *CommandContext) string
-
-// UnimplementedHandlerFunc 未实现的命令handler
-var UnimplementedHandlerFunc HandlerFunc = func(ctx *CommandContext) string {
-	return protocol.MakeError(fmt.Sprintf("%s is not supported", ctx.Args[0]))
-}
 
 // Command 命令定义，包含元数据和处理函数
 type Command struct {
@@ -78,7 +72,22 @@ func Execute(cmdName string, ctx *CommandContext) (string, *Command, bool) {
 	if !exists {
 		return "", nil, false
 	}
+	if reason := validateArity(cmd, len(ctx.Args)); reason != "" {
+		return reason, &cmd, true
+	}
 	cmdLog.Debug("executing command: %s, db=%d, args=%v", cmdName, *ctx.CurrentDBID, ctx.Args)
 	reply := cmd.Handler(ctx)
 	return reply, &cmd, true
+}
+
+// validateArity 校验参数个数，返回错误响应；通过则返回空字符串
+func validateArity(cmd Command, argCount int) string {
+	a := cmd.Arity
+	if a > 0 && argCount != a {
+		return protocol.WrongArgsErr(cmd.Name)
+	}
+	if a < 0 && argCount < -a {
+		return protocol.WrongArgsErr(cmd.Name)
+	}
+	return ""
 }

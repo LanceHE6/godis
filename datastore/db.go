@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"fmt"
+	"strconv"
 
 	"godis/logger"
 	"godis/types"
@@ -75,6 +76,37 @@ func (db *GodisDB) Get(key string) (string, bool) {
 	return sv.Value, true
 }
 
+// GetSet 设置新值并返回旧值，key 不存在返回空字符串和 false
+func (db *GodisDB) GetSet(key, newVal string) (string, bool) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	now := time.Now()
+	item, exists := db.data[key]
+
+	if exists {
+		if !item.IsNeverDie && now.After(item.ExpiresAt) {
+			delete(db.data, key)
+			exists = false
+		}
+	}
+
+	var oldVal string
+	if exists {
+		sv, ok := item.Value.(*types.StringValue)
+		if ok {
+			oldVal = sv.Value
+		}
+	}
+
+	db.data[key] = Item{
+		Type:       types.TypeString,
+		Value:      types.NewStringValue(newVal),
+		IsNeverDie: true,
+	}
+	return oldVal, exists
+}
+
 // Append 在字符串值末尾追加内容，key 不存在时创建，返回新长度
 func (db *GodisDB) Append(key, suffix string) (int, error) {
 	db.mu.Lock()
@@ -109,6 +141,46 @@ func (db *GodisDB) Append(key, suffix string) (int, error) {
 		IsNeverDie: true,
 	}
 	return len(suffix), nil
+}
+
+// IncrBy 对整数类型的字符串值做原子增减，key 不存在时从 0 开始
+func (db *GodisDB) IncrBy(key string, delta int64) (int64, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	now := time.Now()
+	item, exists := db.data[key]
+
+	if exists {
+		if !item.IsNeverDie && now.After(item.ExpiresAt) {
+			delete(db.data, key)
+			exists = false
+		}
+	}
+
+	if exists {
+		sv, ok := item.Value.(*types.StringValue)
+		if !ok {
+			return 0, fmt.Errorf("WRONGTYPE Operation against a key holding the wrong kind of value")
+		}
+		n, err := strconv.ParseInt(sv.Value, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("value is not an integer or out of range")
+		}
+		n += delta
+		sv.Value = strconv.FormatInt(n, 10)
+		item.Value = sv
+		db.data[key] = item
+		return n, nil
+	}
+
+	// key 不存在，从 0 开始
+	db.data[key] = Item{
+		Type:       types.TypeString,
+		Value:      types.NewStringValue(strconv.FormatInt(delta, 10)),
+		IsNeverDie: true,
+	}
+	return delta, nil
 }
 
 // GetItem 获取原始 Item（供命令层判断类型）

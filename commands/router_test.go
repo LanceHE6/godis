@@ -50,7 +50,10 @@ func TestRegister_CaseInsensitive(t *testing.T) {
 	CommandRegistry = make(map[string]Command)
 	defer func() { CommandRegistry = old }()
 
-	Register("lower", 1, FlagWrite, 0, 0, 0, UnimplementedHandlerFunc)
+	handler := func(ctx *CommandContext) string {
+		return protocol.MakeSimpleString("OK")
+	}
+	Register("lower", 1, FlagWrite, 0, 0, 0, handler)
 
 	if _, ok := CommandRegistry["LOWER"]; !ok {
 		t.Error("lowercase registration should be stored as uppercase")
@@ -102,18 +105,59 @@ func TestExecute_NotFound(t *testing.T) {
 	}
 }
 
-func TestUnimplementedHandler(t *testing.T) {
+func TestExecute_ArityError(t *testing.T) {
+	old := CommandRegistry
+	CommandRegistry = make(map[string]Command)
+	defer func() { CommandRegistry = old }()
+
+	// 注册一个 arity=3 的命令（最少 3 个参数）
+	Register("SETX", 3, FlagWrite, 1, 1, 1, func(ctx *CommandContext) string {
+		return protocol.MakeSimpleString("OK")
+	})
+
 	db := datastore.NewGodisDB()
 	id := 0
 	ctx := &CommandContext{
-		Args:        []string{"DEL", "key"},
+		Args:        []string{"SETX"},
 		DB:          db,
 		AllDBs:      []*datastore.GodisDB{db},
 		CurrentDBID: &id,
 	}
 
-	reply := UnimplementedHandlerFunc(ctx)
-	expected := protocol.MakeError("DEL is not supported")
+	reply, _, ok := Execute("SETX", ctx)
+	if !ok {
+		t.Fatal("SETX should exist in registry")
+	}
+	expected := protocol.WrongArgsErr("SETX")
+	if reply != expected {
+		t.Errorf("reply = %q, want %q", reply, expected)
+	}
+}
+
+func TestExecute_ArityMin(t *testing.T) {
+	old := CommandRegistry
+	CommandRegistry = make(map[string]Command)
+	defer func() { CommandRegistry = old }()
+
+	// 注册一个 arity=-3 的命令（至少 3 个参数）
+	Register("SETX", -3, FlagWrite, 1, 1, 1, func(ctx *CommandContext) string {
+		return protocol.MakeSimpleString("OK")
+	})
+
+	db := datastore.NewGodisDB()
+	id := 0
+	ctx := &CommandContext{
+		Args:        []string{"SETX", "key"},
+		DB:          db,
+		AllDBs:      []*datastore.GodisDB{db},
+		CurrentDBID: &id,
+	}
+
+	reply, _, ok := Execute("SETX", ctx)
+	if !ok {
+		t.Fatal("SETX should exist in registry")
+	}
+	expected := protocol.WrongArgsErr("SETX")
 	if reply != expected {
 		t.Errorf("reply = %q, want %q", reply, expected)
 	}
