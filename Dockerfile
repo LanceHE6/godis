@@ -3,7 +3,15 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /bin/godis .
+ARG VERSION=dev
+ARG BUILD_TIME=unknown
+ARG GIT_COMMIT=unknown
+RUN CGO_ENABLED=0 go build -ldflags "\
+    -s -w \
+    -X godis/version.Version=${VERSION} \
+    -X godis/version.BuildTime=${BUILD_TIME} \
+    -X godis/version.GitCommit=${GIT_COMMIT}" \
+    -o /bin/godis .
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates

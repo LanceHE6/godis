@@ -10,9 +10,13 @@ OUTPUT_DIR = build
 
 .PHONY: all build clean test test-integration build-all docker-build
 
-# Docker 构建
+# Docker 构建（自动注入版本、构建时间、Git Commit）
 docker-build:
-	docker build -t godis:latest .
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		-t godis:latest .
 
 # Docker 运行
 docker-run:
