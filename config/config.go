@@ -1,9 +1,11 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
@@ -79,15 +81,37 @@ func generate(filename string) error {
 	}
 	defer file.Close()
 
-	d := defaults()
-	header := "# Godis configuration file\n# Automatically generated. Modify as needed.\n\n"
-	if _, err := file.WriteString(header); err != nil {
-		return err
-	}
+	tmpl := `# Godis configuration file
+# Automatically generated. Modify as needed.
 
-	encoder := yaml.NewEncoder(file)
-	encoder.SetIndent(2)
-	return encoder.Encode(d)
+# 监听地址，0.0.0.0 表示监听所有网络接口
+# 默认值: {{.Bind}}
+bind: {{.Bind}}
+
+# 监听端口
+# 默认: {{.Port}}
+port: {{.Port}}
+
+# 逻辑数据库数量，每个数据库独立隔离
+# 默认: {{.Databases}}
+databases: {{.Databases}}
+
+# AOF 持久化文件路径
+# 默认: {{.AofFile}}
+aof_file: {{.AofFile}}
+
+# 日志文件路径，支持 lumberjack 滚动切割
+# 默认: {{.LogFile}}
+log_file: {{.LogFile}}
+
+# 日志级别：debug / info / warn / error
+# 默认: {{.LogLevel}}
+log_level: {{.LogLevel}}
+`
+	var buf bytes.Buffer
+	template.Must(template.New("config").Parse(tmpl)).Execute(&buf, defaults())
+	_, err = file.WriteString(buf.String())
+	return err
 }
 
 // load 解析 YAML 配置文件
