@@ -8,7 +8,15 @@ LDFLAGS = -X godis/version.Version=$(VERSION) \
 
 OUTPUT_DIR = build
 
-.PHONY: all build clean test test-integration build-all
+.PHONY: all build clean test test-integration build-all docker-build
+
+# Docker 构建
+docker-build:
+	docker build -t godis:latest .
+
+# Docker 运行
+docker-run:
+	docker run -d -p 6379:6379 -v godis-data:/data -v godis-logs:/logs --name godis godis:latest
 
 # 默认构建（当前平台）
 build:
