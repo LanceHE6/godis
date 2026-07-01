@@ -359,3 +359,115 @@ func TestGetSet(t *testing.T) {
 		t.Errorf("GET nokey = %q, want world", val)
 	}
 }
+
+func TestMSetAndMGet(t *testing.T) {
+	cleanDB(t)
+	ctx := context.Background()
+
+	t.Log("MSET k1 v1 k2 v2 k3 v3")
+	err := rdb.MSet(ctx, "k1", "v1", "k2", "v2", "k3", "v3").Err()
+	if err != nil {
+		t.Fatalf("MSET failed: %v", err)
+	}
+
+	t.Log("MGET k1 k2 k3 nonexistent")
+	vals, err := rdb.MGet(ctx, "k1", "k2", "k3", "nonexistent").Result()
+	if err != nil {
+		t.Fatalf("MGET failed: %v", err)
+	}
+	t.Logf("MGET results: %v", vals)
+
+	if len(vals) != 4 {
+		t.Fatalf("MGET returned %d results, want 4", len(vals))
+	}
+	if v, ok := vals[0].(string); !ok || v != "v1" {
+		t.Errorf("MGET[0] = %v, want v1", vals[0])
+	}
+	if v, ok := vals[1].(string); !ok || v != "v2" {
+		t.Errorf("MGET[1] = %v, want v2", vals[1])
+	}
+	if v, ok := vals[2].(string); !ok || v != "v3" {
+		t.Errorf("MGET[2] = %v, want v3", vals[2])
+	}
+	if vals[3] != nil {
+		t.Errorf("MGET[3] = %v, want nil", vals[3])
+	}
+}
+
+func TestMSet_Overwrite(t *testing.T) {
+	cleanDB(t)
+	ctx := context.Background()
+
+	rdb.Set(ctx, "k", "old", 0)
+	t.Log("SET k old, then MSET k new")
+	rdb.MSet(ctx, "k", "new")
+
+	val, err := rdb.Get(ctx, "k").Result()
+	if err != nil {
+		t.Fatalf("GET failed: %v", err)
+	}
+	t.Logf("GET k = %q", val)
+	if val != "new" {
+		t.Errorf("GET k = %q, want new", val)
+	}
+}
+
+func TestMGet_Empty(t *testing.T) {
+	cleanDB(t)
+	ctx := context.Background()
+
+	t.Log("MGET with no keys")
+	_, err := rdb.MGet(ctx).Result()
+	t.Logf("MGET empty error (expected): %v", err)
+	if err == nil {
+		t.Error("MGET empty should return error")
+	}
+}
+
+func TestStrLen(t *testing.T) {
+	cleanDB(t)
+	ctx := context.Background()
+
+	// 不存在 key 返回 0
+	n, err := rdb.StrLen(ctx, "nokey").Result()
+	if err != nil {
+		t.Fatalf("STRLEN nokey failed: %v", err)
+	}
+	t.Logf("STRLEN nokey = %d", n)
+	if n != 0 {
+		t.Errorf("STRLEN nokey = %d, want 0", n)
+	}
+
+	// 字符串长度
+	rdb.Set(ctx, "k", "hello", 0)
+	n, err = rdb.StrLen(ctx, "k").Result()
+	if err != nil {
+		t.Fatalf("STRLEN k failed: %v", err)
+	}
+	t.Logf("STRLEN k = %d", n)
+	if n != 5 {
+		t.Errorf("STRLEN k = %d, want 5", n)
+	}
+
+	// 空字符串
+	rdb.Set(ctx, "empty", "", 0)
+	n, err = rdb.StrLen(ctx, "empty").Result()
+	if err != nil {
+		t.Fatalf("STRLEN empty failed: %v", err)
+	}
+	t.Logf("STRLEN empty = %d", n)
+	if n != 0 {
+		t.Errorf("STRLEN empty = %d, want 0", n)
+	}
+
+	// 中文 UTF-8 字节数
+	rdb.Set(ctx, "zh", "世界", 0)
+	n, err = rdb.StrLen(ctx, "zh").Result()
+	if err != nil {
+		t.Fatalf("STRLEN zh failed: %v", err)
+	}
+	t.Logf("STRLEN zh = %d", n)
+	if n != 6 {
+		t.Errorf("STRLEN zh = %d, want 6 (UTF-8 bytes)", n)
+	}
+}

@@ -202,6 +202,13 @@ func (db *GodisDB) GetItem(key string) (*Item, bool) {
 	return &item, true
 }
 
+// SetItem 替换指定 key 的原始 Item（供测试用）
+func (db *GodisDB) SetItem(key string, item Item) {
+	db.mu.Lock()
+	db.data[key] = item
+	db.mu.Unlock()
+}
+
 // putItem 内部通用写入（供各类型命令层调用）
 func (db *GodisDB) putItem(key string, item Item) {
 	db.mu.Lock()

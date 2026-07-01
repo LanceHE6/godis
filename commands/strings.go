@@ -5,13 +5,18 @@ import (
 	"strings"
 
 	"godis/protocol"
+	"godis/types"
 )
 
 func init() {
 	// 设置 key 的值，支持 EX 参数设置过期时间（秒）
 	Register("SET", -3, FlagWrite, 1, 1, 1, handleSet)
+	// 批量设置多个 key-value 对
+	Register("MSET", -3, FlagWrite, 1, -1, 2, handleMSet)
 	// 获取 key 对应的值
 	Register("GET", 2, FlagReadonly, 1, 1, 1, handleGet)
+	// 批量获取多个 key 的值
+	Register("MGET", -2, FlagReadonly, 1, -1, 1, handleMGet)
 	// 在字符串值末尾追加内容，若 key 不存在则创建
 	Register("APPEND", 3, FlagWrite, 1, 1, 1, handleAppend)
 	// 统计字符串值中比特位为1的数量
@@ -28,6 +33,8 @@ func init() {
 	Register("GETRANGE", 4, FlagReadonly, 1, 1, 1, handleGetRange)
 	// 设置新值并返回旧值
 	Register("GETSET", 3, FlagWrite, 1, 1, 1, handleGetSet)
+	// 返回字符串值的长度
+	Register("STRLEN", 2, FlagReadonly, 1, 1, 1, handleStrLen)
 }
 
 func handleSet(ctx *CommandContext) string {
@@ -208,4 +215,48 @@ func handleGetSet(ctx *CommandContext) string {
 		return protocol.MakeNull()
 	}
 	return protocol.MakeBulkString(oldVal)
+}
+
+// handleMSet 批量设置多个 key-value 对
+// 命令: MSET key1 val1 key2 val2 ...
+func handleMSet(ctx *CommandContext) string {
+	args := ctx.Args[1:] // 去掉命令名
+	if len(args)%2 != 0 {
+		return protocol.MakeError("ERR wrong number of arguments for MSET")
+	}
+	for i := 0; i < len(args); i += 2 {
+		ctx.DB.Set(args[i], args[i+1], 0)
+	}
+	return protocol.MakeSimpleString("OK")
+}
+
+// handleMGet 批量获取多个 key 的值
+// 命令: MGET key1 key2 ...
+func handleMGet(ctx *CommandContext) string {
+	keys := ctx.Args[1:]
+	elements := make([]string, 0, len(keys))
+	for _, key := range keys {
+		val, exists := ctx.DB.Get(key)
+		if !exists {
+			elements = append(elements, protocol.MakeNull())
+		} else {
+			elements = append(elements, protocol.MakeBulkString(val))
+		}
+	}
+	return protocol.MakeArray(elements)
+}
+
+// handleStrLen 返回字符串值的长度
+// 命令: STRLEN key
+func handleStrLen(ctx *CommandContext) string {
+	key := ctx.Args[1]
+	keyType := ctx.DB.TypeOf(key)
+	if keyType < 0 {
+		return protocol.MakeInt(0)
+	}
+	if keyType != types.TypeString {
+		return protocol.MakeError("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+	val, _ := ctx.DB.Get(key)
+	return protocol.MakeInt(len(val))
 }
