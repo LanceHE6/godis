@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,6 +22,8 @@ const testPort = 16379
 var rdb *redis.Client
 var cmd *exec.Cmd
 var passed, failed int32
+var mu sync.Mutex
+var failures []string
 
 func TestMain(m *testing.M) {
 	fmt.Println("[SETUP] building godis binary...")
@@ -75,15 +79,19 @@ log_level: error
 	code := m.Run()
 
 	fmt.Println()
-	fmt.Println(strings.Repeat("=", 50))
-	fmt.Printf("  Test Results\n")
-	fmt.Printf("  Total: %d | Passed: %d | Failed: %d\n", passed+failed, passed, failed)
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Println("  INTEGRATION TEST SUMMARY")
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Printf("  ✅ PASSED: %d\n", passed)
+	fmt.Printf("  ❌ FAILED: %d\n", failed)
+	fmt.Printf("  📊 TOTAL:  %d\n", passed+failed)
 	if failed > 0 {
-		fmt.Printf("  Status: ❌ SOME TESTS FAILED\n")
-	} else {
-		fmt.Printf("  Status: ✅ ALL PASSED\n")
+		fmt.Printf("  ⚠️   %d test(s) failed:\n", failed)
+		for _, name := range failures {
+			fmt.Printf("      - %s\n", name)
+		}
 	}
-	fmt.Println(strings.Repeat("=", 50))
+	fmt.Println(strings.Repeat("=", 60))
 
 	fmt.Println("[TEARDOWN] cleaning up...")
 	rdb.Do(context.Background(), "FLUSHALL")
@@ -112,12 +120,26 @@ func waitForPort(addr string, timeout time.Duration) error {
 
 func cleanDB(t *testing.T) {
 	t.Helper()
+
+	// 在测试函数还在栈上时获取调用者文件名
+	_, file, _, _ := runtime.Caller(1)
+	testFile := filepath.Base(file)
+
 	t.Cleanup(func() {
 		if t.Failed() {
 			atomic.AddInt32(&failed, 1)
+			mu.Lock()
+			failures = append(failures, testFile+"::"+t.Name())
+			mu.Unlock()
 		} else {
 			atomic.AddInt32(&passed, 1)
 		}
 	})
 	rdb.Do(context.Background(), "FLUSHALL")
+}
+
+// testName 已废弃，文件信息改在 cleanDB 入口处捕获
+func testName(t *testing.T) string {
+	_, file, _, _ := runtime.Caller(2)
+	return filepath.Base(file) + "::" + t.Name()
 }
