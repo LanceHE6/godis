@@ -171,12 +171,13 @@ func handleConfig(ctx *CommandContext) string {
 func configFields() map[string]string {
 	cfg := config.Global
 	return map[string]string{
-		"bind":      cfg.Bind,
-		"port":      fmt.Sprintf("%d", cfg.Port),
-		"databases": fmt.Sprintf("%d", cfg.Databases),
-		"aof_file":  cfg.AofFile,
-		"log_file":  cfg.LogFile,
-		"log_level": cfg.LogLevel,
+		"bind":        cfg.Bind,
+		"port":        fmt.Sprintf("%d", cfg.Port),
+		"databases":   fmt.Sprintf("%d", cfg.Databases),
+		"aof_file":    cfg.AofFile,
+		"log_file":    cfg.LogFile,
+		"log_level":   cfg.LogLevel,
+		"requirepass": cfg.RequirePass,
 	}
 }
 
@@ -233,6 +234,8 @@ func configSet(args []string) string {
 	switch key {
 	case "log_level":
 		config.Global.LogLevel = value
+	case "requirepass":
+		config.Global.RequirePass = value
 	default:
 		return protocol.MakeError(fmt.Sprintf("ERR CONFIG SET '%s' is not supported", key))
 	}

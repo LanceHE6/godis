@@ -11,12 +11,13 @@ import (
 )
 
 type Config struct {
-	Bind      string `yaml:"bind"`
-	Port      int    `yaml:"port"`
-	Databases int    `yaml:"databases"`
-	AofFile   string `yaml:"aof_file"`
-	LogFile   string `yaml:"log_file"`
-	LogLevel  string `yaml:"log_level"`
+	Bind        string `yaml:"bind"`
+	Port        int    `yaml:"port"`
+	Databases   int    `yaml:"databases"`
+	AofFile     string `yaml:"aof_file"`
+	LogFile     string `yaml:"log_file"`
+	LogLevel    string `yaml:"log_level"`
+	RequirePass string `yaml:"requirepass"`
 }
 
 var Global Config
@@ -107,7 +108,10 @@ log_file: {{.LogFile}}
 # 日志级别：debug / info / warn / error
 # 默认: {{.LogLevel}}
 log_level: {{.LogLevel}}
-`
+
+# 认证密码，留空表示不启用认证
+# 示例: requirepass: mypassword
+# {{.RequirePass}}`
 	var buf bytes.Buffer
 	template.Must(template.New("config").Parse(tmpl)).Execute(&buf, defaults())
 	_, err = file.WriteString(buf.String())

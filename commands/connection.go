@@ -5,14 +5,28 @@ import (
 	"os"
 	"time"
 
+	"godis/config"
 	"godis/protocol"
 )
 
 func init() {
+	// 认证密码
+	Register("AUTH", 2, FlagFast, 0, 0, 0, handleAuth)
 	// 关闭服务器
 	Register("SHUTDOWN", -1, FlagAdmin, 0, 0, 0, handleShutdown)
 	// 返回服务器当前时间
 	Register("TIME", 1, FlagFast, 0, 0, 0, handleTime)
+}
+
+func handleAuth(ctx *CommandContext) string {
+	password := ctx.Args[1]
+	if config.Global.RequirePass == "" {
+		return protocol.MakeError("ERR Client sent AUTH, but no password is set")
+	}
+	if password == config.Global.RequirePass {
+		return protocol.MakeSimpleString("OK")
+	}
+	return protocol.MakeError("ERR invalid password")
 }
 
 func handleShutdown(ctx *CommandContext) string {

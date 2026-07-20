@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"godis/commands"
+	"godis/config"
 	"godis/datastore"
 	"godis/logger"
 	"godis/protocol"
@@ -55,6 +56,8 @@ func (s *Server) handleClient(conn net.Conn) {
 
 	currentDBID := 0
 	pubsubClient := pubsub.NewClient(conn)
+	authenticated := false
+	requirepass := config.Global.RequirePass
 
 	defer pubsub.GlobalHub.Disconnect(pubsubClient)
 
@@ -82,6 +85,25 @@ func (s *Server) handleClient(conn net.Conn) {
 			Aof:          s.aof,
 			Conn:         conn,
 			PubSubClient: pubsubClient,
+		}
+
+		// 认证检查：未认证时仅允许 AUTH / PING
+		if requirepass != "" && !authenticated {
+			if cmdName == "AUTH" {
+				reply, _, ok := commands.Execute(cmdName, ctx)
+				if ok && strings.HasPrefix(reply, "+OK") {
+					authenticated = true
+				}
+				conn.Write([]byte(reply))
+				continue
+			}
+			if cmdName == "PING" {
+				reply, _, _ := commands.Execute(cmdName, ctx)
+				conn.Write([]byte(reply))
+				continue
+			}
+			conn.Write([]byte("-NOAUTH Authentication required.\r\n"))
+			continue
 		}
 
 		// 订阅模式下只允许订阅相关命令 + PING
