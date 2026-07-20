@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"net"
 	"strings"
 
 	"godis/datastore"
@@ -22,11 +23,13 @@ const (
 
 // CommandContext 命令上下文
 type CommandContext struct {
-	Args        []string
-	DB          *datastore.GodisDB   // 当前正在操作的数据库实例
-	AllDBs      []*datastore.GodisDB // 所有数据库列表
-	CurrentDBID *int                 // 当前绑定的库ID
-	Aof         *datastore.AofLogger // AOF 持久化实例
+	Args         []string
+	DB           *datastore.GodisDB   // 当前正在操作的数据库实例
+	AllDBs       []*datastore.GodisDB // 所有数据库列表
+	CurrentDBID  *int                 // 当前绑定的库ID
+	Aof          *datastore.AofLogger // AOF 持久化实例
+	Conn         net.Conn             // 客户端连接（供 Pub/Sub 推送消息）
+	PubSubClient any                  // *pubsub.Client（循环引用避免，server 注入）
 }
 
 type HandlerFunc func(ctx *CommandContext) string

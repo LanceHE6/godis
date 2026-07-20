@@ -11,16 +11,16 @@ import (
 	"godis/datastore"
 	"godis/logger"
 	"godis/protocol"
+	"godis/pubsub"
 )
 
 var log = logger.NewModuleLogger("SERVER")
 
 type Server struct {
-	dbs []*datastore.GodisDB // 数据库切片，支持多数据库
-	aof *datastore.AofLogger // aof命令日志记录
+	dbs []*datastore.GodisDB
+	aof *datastore.AofLogger
 }
 
-// NewServer 接收 aof 参数
 func NewServer(dbs []*datastore.GodisDB, aof *datastore.AofLogger) *Server {
 	return &Server{dbs: dbs, aof: aof}
 }
@@ -53,7 +53,11 @@ func (s *Server) handleClient(conn net.Conn) {
 	log.Info("new client connected: %s", conn.RemoteAddr())
 	reader := bufio.NewReader(conn)
 
-	currentDBID := 0 // 默认数据库0
+	currentDBID := 0
+	pubsubClient := pubsub.NewClient(conn)
+
+	defer pubsub.GlobalHub.Disconnect(pubsubClient)
+
 	for {
 		args, err := protocol.ParseRESP(reader)
 		if err != nil {
@@ -71,16 +75,35 @@ func (s *Server) handleClient(conn net.Conn) {
 		cmdName := strings.ToUpper(args[0])
 
 		ctx := &commands.CommandContext{
-			Args:        args,
-			DB:          s.dbs[currentDBID],
-			AllDBs:      s.dbs,
-			CurrentDBID: &currentDBID,
-			Aof:         s.aof,
+			Args:         args,
+			DB:           s.dbs[currentDBID],
+			AllDBs:       s.dbs,
+			CurrentDBID:  &currentDBID,
+			Aof:          s.aof,
+			Conn:         conn,
+			PubSubClient: pubsubClient,
+		}
+
+		// 订阅模式下只允许订阅相关命令 + PING
+		if pubsubClient.IsSubscribed() {
+			if !commands.IsPubSubCmd(cmdName) {
+				conn.Write([]byte("-ERR only (P)SUBSCRIBE/(P)UNSUBSCRIBE/PING allowed in subscribed mode\r\n"))
+				continue
+			}
+			reply, _, ok := commands.Execute(cmdName, ctx)
+			if ok && !commands.SubCmdWritesDirect(cmdName) && reply != "" {
+				conn.Write([]byte(reply))
+			}
+			continue
 		}
 
 		reply, cmd, ok := commands.Execute(cmdName, ctx)
 		if ok {
-			// 写类型命令且执行成功时持久化 AOF（非 db0 自动携带 SELECT）
+			// 订阅命令需直接写连接
+			if commands.SubCmdWritesDirect(cmdName) {
+				// 确认消息已在 handler 中写入
+				continue
+			}
 			if cmd.Flags == commands.FlagWrite && strings.HasPrefix(reply, "+OK") {
 				_ = s.aof.WriteCmd(args, currentDBID)
 			}
