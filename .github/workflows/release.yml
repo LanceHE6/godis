@@ -80,9 +80,7 @@ jobs:
           fi
 
           # 写入文件，避免特殊字符在环境变量中出问题
-          cat << 'CHANGELOG_END' > /tmp/changelog.md
-          ${LOG}
-          CHANGELOG_END
+          printf '%s\n' "$LOG" > /tmp/changelog.md
 
           # 读取为 action output
           BODY=$(cat /tmp/changelog.md)
