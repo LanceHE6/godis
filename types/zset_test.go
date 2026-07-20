@@ -125,7 +125,7 @@ func TestZSetValue_RangeByScore(t *testing.T) {
 	z.Add(3.0, "c")
 	z.Add(4.0, "d")
 
-	result := z.RangeByScore(2.0, 3.0)
+	result := z.RangeByScore(2.0, 3.0, 0, 0)
 	if len(result) != 2 {
 		t.Fatalf("RangeByScore(2,3) len = %d, want 2", len(result))
 	}
