@@ -12,17 +12,29 @@ import (
 )
 
 func init() {
+	// 删除 hash 中一个或多个 field
 	Register("HDEL", -3, FlagWrite, 1, 1, 1, handleHDel)
+	// 检查 hash 中指定 field 是否存在
 	Register("HEXISTS", 3, FlagReadonly, 1, 1, 1, handleHExists)
+	// 获取 hash 中指定 field 的值
 	Register("HGET", 3, FlagReadonly, 1, 1, 1, handleHGet)
+	// 返回 hash 中所有的 field-value 对
 	Register("HGETALL", 2, FlagReadonly, 1, 1, 1, handleHGetAll)
+	// 返回 hash 中所有的 field 名称
 	Register("HKEYS", 2, FlagReadonly, 1, 1, 1, handleHKeys)
+	// 返回 hash 中 field 的数量
 	Register("HLEN", 2, FlagReadonly, 1, 1, 1, handleHLen)
+	// 获取 hash 中多个 field 的值
 	Register("HMGET", -3, FlagReadonly, 1, 1, 1, handleHMGet)
+	// 批量设置 hash 中多个 field 的值
 	Register("HMSET", -4, FlagWrite, 1, 1, 1, handleHMSet)
+	// 增量迭代 hash 中的 field
 	Register("HSCAN", -3, FlagReadonly, 1, 1, 1, handleHScan)
+	// 设置 hash 中一个或多个 field 的值，返回新增 field 数量
 	Register("HSET", -4, FlagWrite, 1, 1, 1, handleHSet)
+	// 返回 hash 中指定 field 的值的长度
 	Register("HSTRLEN", 3, FlagReadonly, 1, 1, 1, handleHStrLen)
+	// 返回 hash 中所有的 value
 	Register("HVALS", 2, FlagReadonly, 1, 1, 1, handleHVals)
 }
 
