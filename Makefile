@@ -61,6 +61,10 @@ test:
 test-integration:
 	go test -v ./integration/ -count=1
 
+# 性能压测
+benchmark:
+	@bash benchmark/run.sh
+
 # 清理构建产物
 clean:
 	rm -rf $(OUTPUT_DIR)
