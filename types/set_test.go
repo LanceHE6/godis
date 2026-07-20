@@ -81,16 +81,16 @@ func TestSetValue_RandomMembers(t *testing.T) {
 	s := NewSetValue()
 	s.Add("a", "b", "c")
 
-	// 正数：可重复
-	members := s.RandomMembers(5)
+	// 负数：可重复
+	members := s.RandomMembers(-5)
 	if len(members) != 5 {
-		t.Errorf("RandomMembers(5) len = %d, want 5", len(members))
+		t.Errorf("RandomMembers(-5) len = %d, want 5", len(members))
 	}
 
-	// 负数：不可重复
-	members = s.RandomMembers(-2)
+	// 正数：不可重复
+	members = s.RandomMembers(2)
 	if len(members) != 2 {
-		t.Errorf("RandomMembers(-2) len = %d, want 2", len(members))
+		t.Errorf("RandomMembers(2) len = %d, want 2", len(members))
 	}
 }
 
