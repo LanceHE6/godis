@@ -187,3 +187,159 @@ func (l *ListValue) Len() int {
 	defer l.mu.RUnlock()
 	return l.size
 }
+
+// Set 设置指定位置的值
+func (l *ListValue) Set(index int, value string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if index < 0 {
+		index = l.size + index
+	}
+	if index < 0 || index >= l.size {
+		return false
+	}
+	var node *listNode
+	if index < l.size/2 {
+		node = l.head
+		for i := 0; i < index; i++ {
+			node = node.next
+		}
+	} else {
+		node = l.tail
+		for i := l.size - 1; i > index; i-- {
+			node = node.prev
+		}
+	}
+	node.value = value
+	return true
+}
+
+// InsertBefore 在 pivot 之前插入 value，返回新长度；未找到 pivot 返回 -1
+func (l *ListValue) InsertBefore(pivot, value string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for node := l.head; node != nil; node = node.next {
+		if node.value == pivot {
+			n := &listNode{value: value, prev: node.prev, next: node}
+			if node.prev != nil {
+				node.prev.next = n
+			} else {
+				l.head = n
+			}
+			node.prev = n
+			l.size++
+			return l.size
+		}
+	}
+	return -1
+}
+
+// InsertAfter 在 pivot 之后插入 value，返回新长度；未找到 pivot 返回 -1
+func (l *ListValue) InsertAfter(pivot, value string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for node := l.head; node != nil; node = node.next {
+		if node.value == pivot {
+			n := &listNode{value: value, prev: node, next: node.next}
+			if node.next != nil {
+				node.next.prev = n
+			} else {
+				l.tail = n
+			}
+			node.next = n
+			l.size++
+			return l.size
+		}
+	}
+	return -1
+}
+
+// Remove 删除 count 个值为 value 的节点，count>0 从头删，count<0 从尾删，count=0 删全部
+// 返回实际删除的数量
+func (l *ListValue) Remove(value string, count int) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.size == 0 {
+		return 0
+	}
+
+	removed := 0
+	if count == 0 {
+		// 删除全部匹配的节点
+		node := l.head
+		for node != nil {
+			next := node.next
+			if node.value == value {
+				l.removeNode(node)
+				removed++
+			}
+			node = next
+		}
+	} else if count > 0 {
+		// 从头删 count 个
+		node := l.head
+		for node != nil && removed < count {
+			next := node.next
+			if node.value == value {
+				l.removeNode(node)
+				removed++
+			}
+			node = next
+		}
+	} else {
+		// 从尾删 |count| 个
+		count = -count
+		node := l.tail
+		for node != nil && removed < count {
+			prev := node.prev
+			if node.value == value {
+				l.removeNode(node)
+				removed++
+			}
+			node = prev
+		}
+	}
+	return removed
+}
+
+// removeNode 从链表中移除节点（内部使用，调用方需持有锁）
+func (l *ListValue) removeNode(node *listNode) {
+	if node.prev != nil {
+		node.prev.next = node.next
+	} else {
+		l.head = node.next
+	}
+	if node.next != nil {
+		node.next.prev = node.prev
+	} else {
+		l.tail = node.prev
+	}
+	l.size--
+}
+
+// Find 查找元素位置，从 start 开始，跳过 skip 个匹配，返回 index（-1 未找到）
+func (l *ListValue) Find(value string, start, skip int) int {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if start < 0 {
+		start = l.size + start
+	}
+	if start < 0 {
+		start = 0
+	}
+	node := l.head
+	for i := 0; i < start && node != nil; i++ {
+		node = node.next
+	}
+	for idx := start; node != nil; idx++ {
+		if node.value == value {
+			if skip == 0 {
+				return idx
+			}
+			skip--
+		}
+		node = node.next
+	}
+	return -1
+}
