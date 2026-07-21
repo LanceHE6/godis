@@ -311,6 +311,21 @@ func (db *GodisDB) Expire(key string, seconds int) bool {
 	return true
 }
 
+// ExpireAt 设置 key 的绝对过期时间（Unix 秒时间戳）
+func (db *GodisDB) ExpireAt(key string, ts int64) bool {
+	db.mu.Lock()
+	item, exists := db.data[key]
+	if !exists || (!item.IsNeverDie && time.Now().After(item.ExpiresAt)) {
+		db.mu.Unlock()
+		return false
+	}
+	item.IsNeverDie = false
+	item.ExpiresAt = time.Unix(ts, 0)
+	db.data[key] = item
+	db.mu.Unlock()
+	return true
+}
+
 // PExpire 设置 key 的过期时间（毫秒）
 func (db *GodisDB) PExpire(key string, milliseconds int64) bool {
 	db.mu.Lock()
