@@ -74,18 +74,3 @@ bash benchmark/run.sh 6389
 # redis（需要先安装 redis-server）
 bash benchmark/run.sh 6379
 ```
-
-## 典型结果（本地 MacBook + godis @ 6389, c=50, n=100000）
-
-```
-PING         100000 ops     524ms  190839 ops/sec
-SET          100000 ops     728ms  137362 ops/sec
-GET          100000 ops     631ms  158478 ops/sec
-LPUSH         99999 ops    1024ms   97655 ops/sec
-SADD         100000 ops     687ms  145560 ops/sec
-HSET         100000 ops     712ms  140449 ops/sec
-HGET         100000 ops     589ms  169779 ops/sec
-ZADD         100000 ops     891ms  112233 ops/sec
-ZRANGE       100000 ops     677ms  147710 ops/sec
-PUBLISH      100000 ops     521ms  191938 ops/sec
-```

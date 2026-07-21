@@ -65,6 +65,10 @@ test-integration:
 benchmark:
 	@bash benchmark/run.sh
 
+# 横向对比 Redis vs godis
+compare:
+	@bash benchmark/compare.sh 6379 6389
+
 # 清理构建产物
 clean:
 	rm -rf $(OUTPUT_DIR)
