@@ -71,7 +71,10 @@ func (aof *AofLogger) WriteCmd(args []string, dbID int) error {
 	}
 
 	_, err := aof.file.Write([]byte(resp))
-	return err
+	if err != nil {
+		return err
+	}
+	return aof.file.Sync()
 }
 
 // RewriteToHybrid 触发混合持久化重写

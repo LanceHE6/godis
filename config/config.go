@@ -18,6 +18,9 @@ type Config struct {
 	LogFile     string `yaml:"log_file"`
 	LogLevel    string `yaml:"log_level"`
 	RequirePass string `yaml:"requirepass"`
+	WebAdmin    bool   `yaml:"web_admin"`
+	WebBind     string `yaml:"web_bind"`
+	WebPort     int    `yaml:"web_port"`
 }
 
 var Global Config
@@ -31,6 +34,9 @@ func defaults() Config {
 		AofFile:   "./data/godis.aof",
 		LogFile:   "./logs/godis.log",
 		LogLevel:  "info",
+		WebAdmin:  true,
+		WebBind:   "0.0.0.0",
+		WebPort:   6390,
 	}
 }
 
@@ -109,9 +115,18 @@ log_file: {{.LogFile}}
 # 默认: {{.LogLevel}}
 log_level: {{.LogLevel}}
 
+# Web 管理后台配置
+# 是否启用 Web 管理后台（默认 true）
+web_admin: {{.WebAdmin}}
+# Web 监听地址（默认 0.0.0.0）
+web_bind: {{.WebBind}}
+# Web 监听端口（默认 6390）
+web_port: {{.WebPort}}
+
 # 认证密码，留空表示不启用认证
 # 示例: requirepass: mypassword
-# {{.RequirePass}}`
+# {{.RequirePass}}
+`
 	var buf bytes.Buffer
 	template.Must(template.New("config").Parse(tmpl)).Execute(&buf, defaults())
 	_, err = file.WriteString(buf.String())

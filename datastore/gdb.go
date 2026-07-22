@@ -152,7 +152,12 @@ func LoadAllFromBinary(r io.Reader, dbs []*GodisDB) error {
 			break
 		}
 		dbs[i].mu.Lock()
+		now := time.Now()
 		for k, v := range data {
+			// 跳过已过期的数据，避免恢复后走 GC 清理
+			if !v.IsNeverDie && now.After(v.ExpiresAt) {
+				continue
+			}
 			dbs[i].data[k] = Item{
 				Type:       v.Type,
 				Value:      fromGobValue(v.Type, v.Value),

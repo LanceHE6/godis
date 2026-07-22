@@ -312,12 +312,19 @@ func (db *GodisDB) Expire(key string, seconds int) bool {
 }
 
 // ExpireAt 设置 key 的绝对过期时间（Unix 秒时间戳）
+// 如果时间戳已过期，直接删除 key
 func (db *GodisDB) ExpireAt(key string, ts int64) bool {
 	db.mu.Lock()
 	item, exists := db.data[key]
-	if !exists || (!item.IsNeverDie && time.Now().After(item.ExpiresAt)) {
+	if !exists {
 		db.mu.Unlock()
 		return false
+	}
+	// 时间戳已过期 → 直接删除，避免恢复后等 GC 清理
+	if time.Now().After(time.Unix(ts, 0)) {
+		delete(db.data, key)
+		db.mu.Unlock()
+		return true
 	}
 	item.IsNeverDie = false
 	item.ExpiresAt = time.Unix(ts, 0)

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+
 	"godis/commands"
 	"godis/config"
 	"godis/datastore"
@@ -10,6 +11,7 @@ import (
 	"godis/recovery"
 	"godis/server"
 	"godis/version"
+	"godis/webadmin"
 )
 
 const banner = `
@@ -28,7 +30,7 @@ func main() {
 	fmt.Print(banner)
 	fmt.Printf("  Version: %s  Build: %s  Commit: %s\n\n", version.Version, version.BuildTime, version.GitCommit)
 
-	// 加载配置（不存在则自动生成 godis.conf）
+	// 加载配置
 	if err := config.Init(*configPath); err != nil {
 		panic(fmt.Sprintf("failed to load config: %v", err))
 	}
@@ -54,17 +56,19 @@ func main() {
 	}
 	defer aof.Close()
 
-	// 从 AOF 文件中恢复历史数据（支持多数据库）
+	// 从 AOF 文件中恢复历史数据
 	recovery.ReloadHistoryData(cfg.AofFile, dbs, commands.CommandRegistry)
 
-	// 启动全局 GC 协程，清理所有数据库中的过期 Key
+	// 启动全局 GC 协程
 	datastore.StartGcWorker(dbs)
 
-	// 启动 AOF 自动重写监控协程（适配多数据库）
+	// 启动 AOF 自动重写监控协程
 	datastore.StartAutoRewriteWorker(cfg.AofFile, aof, dbs)
 
-	// 创建并启动网络服务器
-	addr := fmt.Sprintf("%s:%d", cfg.Bind, cfg.Port)
+	// 启动 Web 管理后台
+	webadmin.Start(dbs, aof, webAssets())
+
+	// 启动 TCP 网络服务器
 	srv := server.NewServer(dbs, aof)
-	srv.Start(addr)
+	srv.Start(fmt.Sprintf("%s:%d", cfg.Bind, cfg.Port))
 }

@@ -6,9 +6,36 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 )
+
+// 日志环形缓冲区，供 Web UI 实时查看
+var (
+	logRing     []string
+	logRingMu   sync.RWMutex
+	logRingSize = 200
+)
+
+// GetLogRing 返回最近的日志行
+func GetLogRing() []string {
+	logRingMu.RLock()
+	defer logRingMu.RUnlock()
+	result := make([]string, len(logRing))
+	copy(result, logRing)
+	return result
+}
+
+func appendToRing(msg string) {
+	logRingMu.Lock()
+	logRing = append(logRing, msg)
+	if len(logRing) > logRingSize {
+		logRing = logRing[len(logRing)-logRingSize:]
+	}
+	logRingMu.Unlock()
+}
 
 // Level 定义日志级别数字权重
 type Level int
@@ -99,6 +126,8 @@ func (ml *ModuleLogger) Log(lvl Level, format string, v ...interface{}) {
 	if lvl >= globalLevel {
 		_ = ml.outConsole.Output(3, fullMsg)
 	}
+
+	appendToRing(time.Now().Format("2006/01/02 15:04:05") + " " + fullMsg)
 }
 
 // CloseLogSystem 用于程序安全退出时，刷新缓冲区并关闭滚动器
