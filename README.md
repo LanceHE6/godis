@@ -1,4 +1,6 @@
-# Godis
+<p align="center"><img src="icon.png" width="120" alt="Godis" /></p>
+
+<h1 align="center">Godis</h1>
 
 > 使用 Go 语言编写的 Redis 兼容内存键值数据库。
 
