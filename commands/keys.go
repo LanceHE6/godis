@@ -17,6 +17,8 @@ func init() {
 	Register("EXISTS", -2, FlagReadonly, 1, -1, 1, handleExists)
 	// 设置 key 的过期时间（秒）
 	Register("EXPIRE", 3, FlagWrite, 1, 1, 1, handleExpire)
+	// 设置 key 的绝对过期时间（Unix 秒），用于 AOF 恢复
+	Register("EXPIREAT", 3, FlagWrite, 1, 1, 1, handleExpireAt)
 	// 将 key 移动到另一个数据库
 	Register("MOVE", 3, FlagWrite, 1, 1, 1, handleMove)
 	// 移除 key 的过期时间，使其永久有效
@@ -64,6 +66,19 @@ func handleExpire(ctx *CommandContext) string {
 		return protocol.MakeError("ERR invalid expire time")
 	}
 	if ctx.DB.Expire(key, seconds) {
+		return protocol.MakeInt(1)
+	}
+	return protocol.MakeInt(0)
+}
+
+// handleExpireAt 设置绝对过期时间（Unix 秒）
+func handleExpireAt(ctx *CommandContext) string {
+	key := ctx.Args[1]
+	ts, err := strconv.ParseInt(ctx.Args[2], 10, 64)
+	if err != nil || ts <= 0 {
+		return protocol.MakeError("ERR invalid expire time")
+	}
+	if ctx.DB.ExpireAt(key, ts) {
 		return protocol.MakeInt(1)
 	}
 	return protocol.MakeInt(0)

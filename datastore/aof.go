@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -37,9 +39,24 @@ func NewAofLogger(filename string) (*AofLogger, error) {
 
 // WriteCmd 向文件末尾追加 RESP 文本命令
 // dbID 为当前操作的数据库编号，非 0 时自动前插 SELECT 命令
+// EXPIRE/PEXPIRE 会转换为 EXPIREAT 以保存绝对过期时间，避免恢复时 TTL 重置
 func (aof *AofLogger) WriteCmd(args []string, dbID int) error {
 	aof.mu.Lock()
 	defer aof.mu.Unlock()
+
+	// 将相对过期时间转为绝对时间戳（Redis 同款策略）
+	writeArgs := args
+	if len(args) == 3 {
+		cmd := strings.ToUpper(args[0])
+		if cmd == "EXPIRE" || cmd == "PEXPIRE" {
+			val, err := strconv.Atoi(args[2])
+			if err == nil && val > 0 {
+				dur := time.Duration(val) * time.Second
+				absTs := time.Now().Add(dur).Unix()
+				writeArgs = []string{"EXPIREAT", args[1], strconv.FormatInt(absTs, 10)}
+			}
+		}
+	}
 
 	var resp string
 
@@ -48,13 +65,16 @@ func (aof *AofLogger) WriteCmd(args []string, dbID int) error {
 		resp += fmt.Sprintf("*2\r\n$6\r\nSELECT\r\n$%d\r\n%d\r\n", len(fmt.Sprintf("%d", dbID)), dbID)
 	}
 
-	resp += fmt.Sprintf("*%d\r\n", len(args))
-	for _, arg := range args {
+	resp += fmt.Sprintf("*%d\r\n", len(writeArgs))
+	for _, arg := range writeArgs {
 		resp += fmt.Sprintf("$%d\r\n%s\r\n", len(arg), arg)
 	}
 
 	_, err := aof.file.Write([]byte(resp))
-	return err
+	if err != nil {
+		return err
+	}
+	return aof.file.Sync()
 }
 
 // RewriteToHybrid 触发混合持久化重写

@@ -126,7 +126,7 @@ func (s *Server) handleClient(conn net.Conn) {
 				// 确认消息已在 handler 中写入
 				continue
 			}
-			if cmd.Flags == commands.FlagWrite && strings.HasPrefix(reply, "+OK") {
+			if cmd.Flags == commands.FlagWrite && !strings.HasPrefix(reply, "-ERR") {
 				_ = s.aof.WriteCmd(args, currentDBID)
 			}
 		} else {
